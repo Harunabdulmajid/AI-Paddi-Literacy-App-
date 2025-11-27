@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 // FIX: Aliased the `User` icon to `UserIcon` to avoid a name conflict with the `User` type.
-import { Loader2, ArrowRight, GraduationCap, PartyPopper, CheckCircle, Feather, BookOpen, BrainCircuit, User as UserIcon, Users, Book, PenTool, Briefcase, ShieldCheck, BookCopy, UserPlus, Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { Loader2, ArrowRight, GraduationCap, PartyPopper, CheckCircle, Feather, BookOpen, BrainCircuit, User as UserIcon, Users, Book, PenTool, Briefcase, ShieldCheck, BookCopy, UserPlus, Eye, EyeOff, Lock, Mail, Upload } from 'lucide-react';
 import { apiService } from '../services/apiService';
 import { LearningPath, User, UserRole } from '../types';
 import { Translation } from '../i18n';
@@ -15,6 +15,27 @@ const COUNTRIES = [
     "Tanzania", "Uganda", "Rwanda", "Cameroon", "Zimbabwe", 
     "Senegal", "Ivory Coast", "United States", "United Kingdom", "Canada", "India", "Other"
 ].sort();
+
+const GoogleIcon = () => (
+    <svg className="w-5 h-5" viewBox="0 0 24 24">
+        <path
+            fill="currentColor"
+            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+        />
+        <path
+            fill="currentColor"
+            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        />
+        <path
+            fill="currentColor"
+            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+        />
+        <path
+            fill="currentColor"
+            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+        />
+    </svg>
+);
 
 const WelcomeStep: React.FC<{ onGetStarted: () => void, t: Translation }> = ({ onGetStarted, t }) => (
     <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-100 p-4">
@@ -245,6 +266,26 @@ const LinkChildStep: React.FC<{ t: Translation, transitionUser: User, setUser: (
     );
 };
 
+const VerificationSentStep: React.FC<{ email: string, onLogin: () => void }> = ({ email, onLogin }) => (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-100 p-4">
+        <div className="w-full max-w-md mx-auto text-center">
+            <div className="bg-white rounded-2xl shadow-lg p-8 sm:p-10 transform transition-all animate-slide-up">
+                <Mail className="text-primary mx-auto mb-4" size={48} />
+                <h1 className="text-2xl md:text-3xl font-extrabold text-neutral-800 mt-2">Check your inbox</h1>
+                <p className="text-neutral-600 mt-4 mb-8 text-lg">
+                    We have sent you a verification email to <span className="font-bold text-neutral-800">{email}</span>. Verify it and log in.
+                </p>
+                <button
+                    onClick={onLogin}
+                    className="w-full bg-primary text-white font-bold py-4 px-6 rounded-xl text-lg hover:bg-primary-dark transition-transform active:scale-95"
+                >
+                    Return to Login
+                </button>
+            </div>
+        </div>
+    </div>
+);
+
 export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [name, setName] = useState('');
@@ -252,13 +293,16 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [country, setCountry] = useState('');
   const [password, setPassword] = useState('');
+  const [repeatPassword, setRepeatPassword] = useState('');
+  const [photo, setPhoto] = useState<File | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetStatus, setResetStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
-  const [step, setStep] = useState<'welcome' | 'auth' | 'select_role' | 'select_path' | 'create_class' | 'link_child' | 'path_assigned' | 'success_signin'>('welcome');
+  const [step, setStep] = useState<'welcome' | 'auth' | 'select_role' | 'select_path' | 'create_class' | 'link_child' | 'path_assigned' | 'success_signin' | 'verification_sent'>('welcome');
+  const [verificationEmail, setVerificationEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assignedLevel, setAssignedLevel] = useState<LearningPath | null>(null);
@@ -297,11 +341,21 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
             setTransitionUser(existingUser);
             setStep('success_signin');
         } catch (err: any) {
-            setError(err.message || t.onboarding.errorGeneric);
+            if (err.message === "EmailVerificationRequired") {
+                setVerificationEmail(email);
+                setStep('verification_sent');
+            } else {
+                setError(err.message || t.onboarding.errorGeneric);
+            }
         } finally {
             setIsLoading(false);
         }
     } else { // signup
+        if (password !== repeatPassword) {
+            setError("Passwords do not match.");
+            setIsLoading(false);
+            return;
+        }
         if (!validatePassword(password)) {
             setError("Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character.");
             setIsLoading(false);
@@ -309,9 +363,11 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
         }
 
         try {
+            // Check if user exists before proceeding to multi-step signup
+            // We use API service check first to avoid partially filling form if user exists
             const existingUser = await apiService.getUserByEmail(email);
             if (existingUser) {
-                setError(t.onboarding.errorUserExists);
+                setError("User already exists. Sign in?");
                 setIsLoading(false);
                 return;
             }
@@ -324,6 +380,21 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
             setIsLoading(false);
         }
     }
+  };
+  
+  const handleGoogleSignIn = async () => {
+      if (isLoading) return;
+      setIsLoading(true);
+      setError(null);
+      try {
+          const user = await apiService.signInWithGoogle();
+          setTransitionUser(user);
+          setStep('success_signin');
+      } catch (err: any) {
+          setError("Failed to sign in with Google. Please try again.");
+      } finally {
+          setIsLoading(false);
+      }
   };
   
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -356,8 +427,16 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
                   setStep('link_child');
               }
           } catch (err: any) {
-              setError(t.onboarding.errorGeneric);
-              setStep('auth');
+              if (err.message === "EmailVerificationRequired") {
+                  setVerificationEmail(signupDetails.email);
+                  setStep('verification_sent');
+              } else if (err.message?.includes('already exists')) {
+                  setError("User already exists. Sign in?");
+                  setStep('auth');
+              } else {
+                  setError(t.onboarding.errorGeneric);
+                  setStep('auth');
+              }
           } finally {
               setIsLoading(false);
           }
@@ -374,12 +453,16 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
       setAssignedLevel(level);
       setStep('path_assigned');
     } catch (err: any) {
-      if (err.message?.includes('already exists')) {
-          setError(t.onboarding.errorUserExists);
+      if (err.message === "EmailVerificationRequired") {
+          setVerificationEmail(signupDetails.email);
+          setStep('verification_sent');
+      } else if (err.message?.includes('already exists')) {
+          setError("User already exists. Sign in?");
+          setStep('auth');
       } else {
           setError(t.onboarding.errorGeneric);
+          setStep('auth');
       }
-      setStep('auth'); // Go back to auth screen on error
     } finally {
       setIsLoading(false);
     }
@@ -388,15 +471,17 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
   const switchAuthMode = (mode: 'signin' | 'signup') => {
     setAuthMode(mode);
     setError(null);
-    setName('');
-    setEmail('');
-    setPhoneNumber('');
-    setCountry('');
+    // Only reset sensitive fields or all if desired
     setPassword('');
+    setRepeatPassword('');
   };
   
   if (step === 'welcome') {
       return <WelcomeStep onGetStarted={() => setStep('auth')} t={t} />;
+  }
+  
+  if (step === 'verification_sent') {
+      return <VerificationSentStep email={verificationEmail} onLogin={() => { setStep('auth'); setAuthMode('signin'); setPassword(''); }} />;
   }
   
   if (step === 'create_class' && transitionUser) {
@@ -465,8 +550,16 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
                     
                     {resetStatus === 'sent' ? (
                         <div className="py-4">
-                            <p className="text-green-600 font-semibold mb-6">If an account exists with that email, we've sent instructions to reset your password.</p>
-                            <button onClick={() => setIsForgotPasswordMode(false)} className="text-primary font-bold hover:underline">Back to Sign In</button>
+                            <CheckCircle className="text-secondary mx-auto mb-4" size={48} />
+                            <p className="text-neutral-600 text-lg font-medium mb-6">
+                                We sent you a password change link to <span className="font-bold text-neutral-800">{resetEmail}</span>.
+                            </p>
+                            <button 
+                                onClick={() => { setIsForgotPasswordMode(false); setResetStatus('idle'); }} 
+                                className="w-full bg-primary text-white font-bold py-3 rounded-lg hover:bg-primary-dark transition text-lg"
+                            >
+                                Sign In
+                            </button>
                         </div>
                     ) : (
                         <>
@@ -482,7 +575,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
                                 />
                                 {resetStatus === 'error' && <p className="text-red-500 text-sm">Failed to send reset link. Please try again.</p>}
                                 <button type="submit" disabled={resetStatus === 'sending'} className="w-full bg-primary text-white font-bold py-3 rounded-lg hover:bg-primary-dark transition flex items-center justify-center gap-2 disabled:bg-neutral-400 text-lg">
-                                    {resetStatus === 'sending' ? <Loader2 className="animate-spin" /> : "Send Reset Link"}
+                                    {resetStatus === 'sending' ? <Loader2 className="animate-spin" /> : "Get Reset Link"}
                                 </button>
                             </form>
                             <button onClick={() => setIsForgotPasswordMode(false)} className="mt-6 text-neutral-500 font-bold hover:text-neutral-800 transition">Back to Sign In</button>
@@ -507,6 +600,24 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
                 <form onSubmit={handleAuth} className="space-y-4 text-left">
                     {authMode === 'signup' && (
                         <>
+                            <div className="flex justify-center mb-4">
+                                <label className="cursor-pointer group relative">
+                                    <div className="w-24 h-24 rounded-full bg-neutral-100 border-2 border-dashed border-neutral-300 flex items-center justify-center text-neutral-400 group-hover:border-primary group-hover:text-primary transition-colors overflow-hidden">
+                                        {photo ? (
+                                            <img src={URL.createObjectURL(photo)} alt="Profile" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <Upload size={32} />
+                                        )}
+                                    </div>
+                                    <input 
+                                        type="file" 
+                                        accept="image/*" 
+                                        onChange={(e) => setPhoto(e.target.files?.[0] || null)} 
+                                        className="hidden" 
+                                    />
+                                    <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-neutral-500 whitespace-nowrap">Upload Photo</span>
+                                </label>
+                            </div>
                             <input type="text" placeholder={t.onboarding.namePlaceholder} value={name} onChange={e => setName(e.target.value)} className="w-full p-4 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary bg-white text-neutral-900 placeholder:text-neutral-400 text-lg" required />
                             <input type="tel" placeholder="Phone Number" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} className="w-full p-4 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary bg-white text-neutral-900 placeholder:text-neutral-400 text-lg" required />
                             <select value={country} onChange={e => setCountry(e.target.value)} className="w-full p-4 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary bg-white text-neutral-900 text-lg" required>
@@ -530,18 +641,56 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
                             {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                         </button>
                      </div>
+
+                     {authMode === 'signup' && (
+                        <div className="relative">
+                            <input 
+                                type={showPassword ? "text" : "password"} 
+                                placeholder="Repeat Password" 
+                                value={repeatPassword} 
+                                onChange={e => setRepeatPassword(e.target.value)} 
+                                className="w-full p-4 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary bg-white text-neutral-900 placeholder:text-neutral-400 text-lg pr-12" 
+                                required 
+                            />
+                        </div>
+                     )}
+
                      {authMode === 'signin' && (
                          <div className="text-right">
-                             <button type="button" onClick={() => setIsForgotPasswordMode(true)} className="text-sm font-semibold text-primary hover:underline">Forgot Password?</button>
+                             <button type="button" onClick={() => { setResetEmail(email); setIsForgotPasswordMode(true); }} className="text-sm font-semibold text-primary hover:underline">Forgot Password?</button>
                          </div>
                      )}
 
-                    {error && <p className="text-red-500 text-sm font-semibold text-left pt-1">{error}</p>}
+                    {error && (
+                        <div className="pt-1 text-left">
+                            <p className="text-red-500 text-sm font-semibold">{error}</p>
+                            {error.includes('Sign in?') && (
+                                <button onClick={() => switchAuthMode('signin')} className="text-sm font-bold text-primary hover:underline mt-1">
+                                    Click here to Sign In
+                                </button>
+                            )}
+                        </div>
+                    )}
                     
                     <button type="submit" disabled={isLoading} className="w-full bg-primary text-white font-bold py-4 rounded-lg hover:bg-primary-dark transition flex items-center justify-center gap-2 disabled:bg-neutral-400 text-lg mt-2">
                         {isLoading ? <Loader2 className="animate-spin" /> : (authMode === 'signin' ? t.onboarding.signInButton : t.onboarding.signUpButton)}
                     </button>
                 </form>
+
+                <div className="flex items-center gap-4 my-6">
+                    <div className="h-px bg-neutral-300 flex-grow"></div>
+                    <span className="text-neutral-500 font-medium text-sm">OR</span>
+                    <div className="h-px bg-neutral-300 flex-grow"></div>
+                </div>
+
+                <button 
+                    onClick={handleGoogleSignIn} 
+                    disabled={isLoading}
+                    className="w-full flex items-center justify-center gap-3 bg-white border border-neutral-300 text-neutral-700 font-bold py-3 rounded-lg hover:bg-neutral-50 transition active:scale-95 disabled:bg-neutral-100 disabled:text-neutral-400"
+                >
+                    <GoogleIcon />
+                    Sign in with Google
+                </button>
 
                 <p className="mt-6 text-center text-neutral-600">
                     {authMode === 'signin' ? (

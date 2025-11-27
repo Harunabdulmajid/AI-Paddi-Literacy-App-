@@ -1,7 +1,7 @@
 // FIX: Import `useEffect` from React to resolve the "Cannot find name 'useEffect'" error.
 import React, { useContext, useRef, useCallback, useState, useEffect } from 'react';
 import { AppContext } from './AppContext';
-import { Award, CheckCircle, Download, Share2, Edit, X, Check, Loader2, LogOut, ShieldCheck, MessageSquarePlus, Wallet, Feather, BookOpen, BrainCircuit, PenTool, Briefcase } from 'lucide-react';
+import { Award, CheckCircle, Download, Share2, Edit, X, Check, Loader2, LogOut, ShieldCheck, MessageSquarePlus, Wallet, Feather, BookOpen, BrainCircuit, PenTool, Briefcase, Trash2, AlertTriangle, Upload, Image as ImageIcon } from 'lucide-react';
 import { LearningPath, User, Page, AppContextType } from '../types';
 import { useTranslations } from '../i18n';
 // FIX: Import the `BADGES` constant to resolve the "Cannot find name 'BADGES'" error.
@@ -58,10 +58,15 @@ interface AvatarSelectionModalProps {
     onSave: (avatarId: string) => Promise<void>;
     currentAvatarId: string;
     isSaving: boolean;
+    user: User;
+    onUploadSuccess: (url: string) => void;
 }
 
-const AvatarSelectionModal: React.FC<AvatarSelectionModalProps> = ({ isOpen, onClose, onSave, currentAvatarId, isSaving }) => {
+const AvatarSelectionModal: React.FC<AvatarSelectionModalProps> = ({ isOpen, onClose, onSave, currentAvatarId, isSaving, user, onUploadSuccess }) => {
     const [selectedAvatarId, setSelectedAvatarId] = useState(currentAvatarId);
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         setSelectedAvatarId(currentAvatarId);
@@ -73,6 +78,43 @@ const AvatarSelectionModal: React.FC<AvatarSelectionModalProps> = ({ isOpen, onC
         onSave(selectedAvatarId);
     };
 
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (file.size > 2 * 1024 * 1024) { // 2MB limit
+                setUploadError("Image too large. Max 2MB.");
+                return;
+            }
+            setIsUploading(true);
+            setUploadError(null);
+            try {
+                const url = await apiService.uploadProfilePicture(user.id, file);
+                onUploadSuccess(url);
+                onClose(); // Close modal on successful upload
+            } catch (err) {
+                console.error(err);
+                setUploadError("Failed to upload image.");
+            } finally {
+                setIsUploading(false);
+            }
+        }
+    };
+
+    const handleRemoveCustomPhoto = async () => {
+        if (!user.avatarUrl) return;
+        setIsUploading(true);
+        try {
+            await apiService.deleteProfilePicture(user.id);
+            onUploadSuccess(''); // Or trigger user refresh in parent
+            onClose();
+        } catch (err) {
+            console.error(err);
+            setUploadError("Failed to remove photo.");
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
             <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 max-w-lg w-full transform transition-all animate-slide-up relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -80,6 +122,41 @@ const AvatarSelectionModal: React.FC<AvatarSelectionModalProps> = ({ isOpen, onC
                     <X size={24} />
                 </button>
                 <h2 className="text-2xl font-bold text-neutral-800">Choose Your Avatar</h2>
+                
+                <div className="mt-4 mb-2 p-4 bg-neutral-50 rounded-xl border border-neutral-200 text-center">
+                    <h3 className="font-semibold text-neutral-700 mb-3">Custom Profile Picture</h3>
+                    <div className="flex flex-col items-center gap-3">
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleFileUpload} 
+                            accept="image/*" 
+                            className="hidden" 
+                        />
+                        <button 
+                            onClick={() => fileInputRef.current?.click()} 
+                            disabled={isUploading}
+                            className="flex items-center gap-2 bg-white border border-neutral-300 text-neutral-700 font-bold py-2 px-4 rounded-lg hover:bg-neutral-100 transition disabled:opacity-50"
+                        >
+                            {isUploading ? <Loader2 className="animate-spin" size={18}/> : <Upload size={18}/>}
+                            Upload Photo
+                        </button>
+                        {user.avatarUrl && (
+                            <button 
+                                onClick={handleRemoveCustomPhoto}
+                                disabled={isUploading}
+                                className="text-red-500 text-sm font-semibold hover:underline flex items-center gap-1"
+                            >
+                                <Trash2 size={14}/> Remove Custom Photo
+                            </button>
+                        )}
+                        {uploadError && <p className="text-red-500 text-sm font-semibold">{uploadError}</p>}
+                    </div>
+                </div>
+
+                <div className="border-t border-neutral-200 my-4"></div>
+
+                <h3 className="font-semibold text-neutral-700 mb-3 text-center">Or Select an Avatar</h3>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 my-6">
                     {Object.entries(AVATARS).map(([id, AvatarComponent]) => (
                         <button
@@ -166,6 +243,9 @@ export const Profile: React.FC = () => {
     const [selectedPath, setSelectedPath] = useState<LearningPath | null>(null);
     const [isSavingPath, setIsSavingPath] = useState(false);
 
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+
     if (!user) return null;
 
     const handleEditName = () => {
@@ -197,12 +277,21 @@ export const Profile: React.FC = () => {
             return;
         }
         setIsSavingAvatar(true);
-        const updatedUser = await apiService.updateUser(user.email, { avatarId });
+        // Clear avatarUrl if switching to a preset avatar
+        const updatedUser = await apiService.updateUser(user.email, { avatarId, avatarUrl: null as any }); 
         if (updatedUser) {
             setUser(updatedUser as User);
         }
         setIsSavingAvatar(false);
         setIsAvatarModalOpen(false);
+    };
+
+    const handleUploadSuccess = async (url: string) => {
+        // Refresh user data to get the new avatarUrl
+        const freshUser = await apiService.getUserByEmail(user.email);
+        if (freshUser) {
+            setUser(freshUser);
+        }
     };
     
     const handlePathSelect = (path: LearningPath) => {
@@ -228,6 +317,19 @@ export const Profile: React.FC = () => {
         setIsSavingPath(false);
         setIsPathConfirmModalOpen(false);
         setSelectedPath(null);
+    };
+
+    const handleDeleteAccount = async () => {
+        setIsDeleting(true);
+        try {
+            await apiService.deleteUserAccount(user.id);
+            logout();
+        } catch (error) {
+            console.error("Failed to delete account", error);
+            alert("Failed to delete account. Please try again.");
+            setIsDeleting(false);
+            setIsDeleteConfirmOpen(false);
+        }
     };
 
     const userPathModules = user.level ? LEARNING_PATHS[user.level].levels.flat() : [];
@@ -258,6 +360,8 @@ export const Profile: React.FC = () => {
                 onSave={handleSaveAvatar}
                 currentAvatarId={user.avatarId}
                 isSaving={isSavingAvatar}
+                user={user}
+                onUploadSuccess={handleUploadSuccess}
             />
             <PathSelectionModal 
                 isOpen={isPathModalOpen}
@@ -274,6 +378,15 @@ export const Profile: React.FC = () => {
                 isConfirming={isSavingPath}
                 confirmText={t.common.submit}
             />
+            <ConfirmationModal
+                isOpen={isDeleteConfirmOpen}
+                onClose={() => setIsDeleteConfirmOpen(false)}
+                onConfirm={handleDeleteAccount}
+                title="Delete Account"
+                message="Are you sure you want to delete your account? This action cannot be undone and you will lose all progress and badges."
+                isConfirming={isDeleting}
+                confirmText="Delete My Account"
+            />
 
             <div className="container mx-auto p-4 md:p-8">
                 <h2 className="text-3xl md:text-4xl font-extrabold text-neutral-800 mb-2">{t.profile.title}</h2>
@@ -281,7 +394,7 @@ export const Profile: React.FC = () => {
 
                 <div className="grid lg:grid-cols-3 gap-8">
                     {/* Profile Card */}
-                    <div className="lg:col-span-1 bg-white p-6 md:p-8 rounded-2xl shadow-lg text-center flex flex-col items-center">
+                    <div className="lg:col-span-1 bg-white p-6 md:p-8 rounded-2xl shadow-lg text-center flex flex-col items-center h-fit">
                         <button onClick={() => setIsAvatarModalOpen(true)} className="relative group rounded-full mb-5 ring-4 ring-white shadow-md hover:ring-primary transition-all">
                             <UserAvatar name={user.name} avatarId={user.avatarId} avatarUrl={user.avatarUrl} className="w-24 h-24 md:w-32 md:h-32 text-4xl md:text-5xl" />
                             <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
@@ -318,7 +431,7 @@ export const Profile: React.FC = () => {
                             <button onClick={() => setIsFeedbackModalOpen(true)} className="flex items-center justify-center gap-2 text-md font-bold text-neutral-600 hover:text-primary transition-colors">
                                 <MessageSquarePlus size={20} /> {t.profile.feedbackButton}
                             </button>
-                            <button onClick={logout} className="flex items-center justify-center gap-2 text-md font-bold text-red-600 hover:text-red-800 transition-colors">
+                            <button onClick={logout} className="flex items-center justify-center gap-2 text-md font-bold text-neutral-600 hover:text-neutral-800 transition-colors">
                                 <LogOut size={20} /> {t.header.logout}
                             </button>
                         </div>
@@ -402,6 +515,23 @@ export const Profile: React.FC = () => {
                                     <p className="text-neutral-500">{t.profile.moreCertificates}</p>
                                 </div>
                             )}
+                        </div>
+
+                        {/* Danger Zone */}
+                        <div className="bg-red-50 p-6 md:p-8 rounded-2xl shadow-lg border border-red-200">
+                            <div className="flex items-start gap-4">
+                                <AlertTriangle className="text-red-600 flex-shrink-0" size={32} />
+                                <div>
+                                    <h4 className="text-xl font-bold text-red-800 mb-2">Danger Zone</h4>
+                                    <p className="text-red-600 mb-4">Deleting your account is irreversible. All your progress, badges, and points will be permanently lost.</p>
+                                    <button 
+                                        onClick={() => setIsDeleteConfirmOpen(true)}
+                                        className="flex items-center gap-2 bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition"
+                                    >
+                                        <Trash2 size={18} /> Delete Account
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
