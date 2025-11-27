@@ -39,11 +39,11 @@ const initializeDb = () => {
     let users = readDb<Record<string, User>>(DB_KEY_USERS, {});
     if (Object.keys(users).length === 0) {
         const mockUsers: Omit<User, 'wallet'>[] = [
-            { id: 'user-amina', googleId: 'gid-amina', email: 'amina@example.com', name: 'Amina', role: UserRole.Student, points: 250, level: LearningPath.Innovator, completedModules: ['what-is-ai', 'how-ai-works', 'ai-in-daily-life', 'risks-and-bias', 'ai-and-jobs'], badges: ['first-step', 'ai-graduate', 'point-pioneer'], multiplayerStats: { wins: 0, gamesPlayed: 0 }, lastLoginDate: '', loginStreak: 0, certificateLevel: 'basic', theme: 'default', avatarId: 'avatar-01', unlockedVoices: [], tutorTokens: 2, quizRewinds: 5, unlockedBanners: [], unlockedThemes: ['default'], isPro: false },
-            { id: 'user-kwame', googleId: 'gid-kwame', email: 'kwame@example.com', name: 'Kwame', role: UserRole.Student, points: 190, level: LearningPath.Creator, completedModules: ['what-is-ai', 'how-ai-works', 'ai-in-daily-life'], badges: ['first-step', 'point-pioneer'], multiplayerStats: { wins: 0, gamesPlayed: 0 }, lastLoginDate: '', loginStreak: 0, certificateLevel: 'basic', theme: 'default', avatarId: 'avatar-01', unlockedVoices: [], tutorTokens: 0, quizRewinds: 1, unlockedBanners: [], unlockedThemes: ['default'], isPro: false },
-            { id: 'user-fatou', googleId: 'gid-fatou', email: 'fatou@example.com', name: 'Fatou', role: UserRole.Teacher, points: 175, level: null, completedModules: [], badges: ['first-step', 'point-pioneer'], multiplayerStats: { wins: 0, gamesPlayed: 0 }, lastLoginDate: '', loginStreak: 0, certificateLevel: 'basic', theme: 'default', avatarId: 'avatar-01', unlockedVoices: [], tutorTokens: 0, quizRewinds: 0, unlockedBanners: [], unlockedThemes: ['default'], isPro: false },
-            { id: 'user-chinedu', googleId: 'gid-chinedu', email: 'chinedu@example.com', name: 'Chinedu', role: UserRole.Parent, points: 150, level: null, completedModules: [], badges: ['first-step', 'point-pioneer'], multiplayerStats: { wins: 0, gamesPlayed: 0 }, lastLoginDate: '', loginStreak: 0, certificateLevel: 'basic', theme: 'default', avatarId: 'avatar-01', unlockedVoices: [], tutorTokens: 0, quizRewinds: 0, unlockedBanners: [], unlockedThemes: ['default'], childEmail: 'zola@example.com', isPro: false },
-            { id: 'user-zola', googleId: 'gid-zola', email: 'zola@example.com', name: 'Zola', role: UserRole.Student, points: 120, level: LearningPath.Explorer, completedModules: ['what-is-ai'], badges: ['first-step', 'point-pioneer'], multiplayerStats: { wins: 0, gamesPlayed: 0 }, lastLoginDate: '', loginStreak: 0, certificateLevel: 'basic', theme: 'default', avatarId: 'avatar-01', unlockedVoices: [], tutorTokens: 0, quizRewinds: 0, unlockedBanners: [], unlockedThemes: ['default'], isPro: false },
+            { id: 'user-amina', googleId: 'gid-amina', email: 'amina@example.com', password: 'Password@123', name: 'Amina', role: UserRole.Student, points: 250, level: LearningPath.Innovator, completedModules: ['what-is-ai', 'how-ai-works', 'ai-in-daily-life', 'risks-and-bias', 'ai-and-jobs'], badges: ['first-step', 'ai-graduate', 'point-pioneer'], multiplayerStats: { wins: 0, gamesPlayed: 0 }, lastLoginDate: '', loginStreak: 0, certificateLevel: 'basic', theme: 'default', avatarId: 'avatar-01', unlockedVoices: [], tutorTokens: 2, quizRewinds: 5, unlockedBanners: [], unlockedThemes: ['default'], isPro: false },
+            { id: 'user-kwame', googleId: 'gid-kwame', email: 'kwame@example.com', password: 'Password@123', name: 'Kwame', role: UserRole.Student, points: 190, level: LearningPath.Creator, completedModules: ['what-is-ai', 'how-ai-works', 'ai-in-daily-life'], badges: ['first-step', 'point-pioneer'], multiplayerStats: { wins: 0, gamesPlayed: 0 }, lastLoginDate: '', loginStreak: 0, certificateLevel: 'basic', theme: 'default', avatarId: 'avatar-01', unlockedVoices: [], tutorTokens: 0, quizRewinds: 1, unlockedBanners: [], unlockedThemes: ['default'], isPro: false },
+            { id: 'user-fatou', googleId: 'gid-fatou', email: 'fatou@example.com', password: 'Password@123', name: 'Fatou', role: UserRole.Teacher, points: 175, level: null, completedModules: [], badges: ['first-step', 'point-pioneer'], multiplayerStats: { wins: 0, gamesPlayed: 0 }, lastLoginDate: '', loginStreak: 0, certificateLevel: 'basic', theme: 'default', avatarId: 'avatar-01', unlockedVoices: [], tutorTokens: 0, quizRewinds: 0, unlockedBanners: [], unlockedThemes: ['default'], isPro: false },
+            { id: 'user-chinedu', googleId: 'gid-chinedu', email: 'chinedu@example.com', password: 'Password@123', name: 'Chinedu', role: UserRole.Parent, points: 150, level: null, completedModules: [], badges: ['first-step', 'point-pioneer'], multiplayerStats: { wins: 0, gamesPlayed: 0 }, lastLoginDate: '', loginStreak: 0, certificateLevel: 'basic', theme: 'default', avatarId: 'avatar-01', unlockedVoices: [], tutorTokens: 0, quizRewinds: 0, unlockedBanners: [], unlockedThemes: ['default'], childEmail: 'zola@example.com', isPro: false },
+            { id: 'user-zola', googleId: 'gid-zola', email: 'zola@example.com', password: 'Password@123', name: 'Zola', role: UserRole.Student, points: 120, level: LearningPath.Explorer, completedModules: ['what-is-ai'], badges: ['first-step', 'point-pioneer'], multiplayerStats: { wins: 0, gamesPlayed: 0 }, lastLoginDate: '', loginStreak: 0, certificateLevel: 'basic', theme: 'default', avatarId: 'avatar-01', unlockedVoices: [], tutorTokens: 0, quizRewinds: 0, unlockedBanners: [], unlockedThemes: ['default'], isPro: false },
         ];
         const usersDb = mockUsers.reduce((acc, user) => {
             acc[user.email] = { ...user, wallet: initializeDefaultWallet(user.points) };
@@ -64,6 +64,39 @@ export const apiService = {
         resolve(users[email.toLowerCase()] || null);
       }, SIMULATED_DELAY);
     });
+  },
+
+  async authenticate(email: string, password?: string): Promise<User> {
+      return new Promise((resolve, reject) => {
+          setTimeout(() => {
+              const users = readDb<Record<string, User>>(DB_KEY_USERS, {});
+              const user = users[email.toLowerCase()];
+              if (!user) {
+                  return reject(new Error("User not found."));
+              }
+              // If user has a password set (new users), check it.
+              // For legacy mock users without passwords (if any left), we might skip, but our init sets them.
+              if (user.password && user.password !== password) {
+                  return reject(new Error("Invalid password."));
+              }
+              resolve(user);
+          }, SIMULATED_DELAY);
+      });
+  },
+
+  async resetPassword(email: string): Promise<{ success: boolean }> {
+      return new Promise((resolve, reject) => {
+          setTimeout(() => {
+              const users = readDb<Record<string, User>>(DB_KEY_USERS, {});
+              const user = users[email.toLowerCase()];
+              if (!user) {
+                  // Security: usually don't reveal if user exists, but for this mock app it helps
+                  return reject(new Error("No account found with this email."));
+              }
+              // In a real app, send email here.
+              resolve({ success: true });
+          }, SIMULATED_DELAY);
+      });
   },
 
   async handleUserLogin(email: string): Promise<{ user: User, newTransactions: Transaction[] }> {
@@ -142,7 +175,7 @@ export const apiService = {
     });
   },
 
-  async createUser(details: { name: string, email: string, level: LearningPath | null, role: UserRole, googleId: string }): Promise<User> {
+  async createUser(details: { name: string, email: string, password?: string, level: LearningPath | null, role: UserRole, googleId: string, phoneNumber?: string, country?: string }): Promise<User> {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         const users = readDb<Record<string, User>>(DB_KEY_USERS, {});
@@ -157,7 +190,10 @@ export const apiService = {
           id: userId,
           googleId: details.googleId,
           email: lowercasedEmail,
+          password: details.password,
           name: details.name,
+          phoneNumber: details.phoneNumber,
+          country: details.country,
           level: details.level,
           role: details.role,
           points: 0,

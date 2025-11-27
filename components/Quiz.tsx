@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect, useRef, useCallback } from 'react';
 import { Quiz as QuizType } from '../types';
-import { CheckCircle, XCircle, Mic, RefreshCw } from 'lucide-react';
+import { CheckCircle, XCircle, Mic, RefreshCw, ArrowRight } from 'lucide-react';
 import { useTranslations } from '../i18n';
 import { AppContext } from './AppContext';
 import { useSpeech } from '../services/hooks/useSpeech';
@@ -27,27 +27,30 @@ export const Quiz: React.FC<QuizProps> = ({ quiz, onComplete }) => {
 
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   
+  // Use a ref for onComplete to prevent useEffect cleanup when parent re-renders (due to point updates)
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+  
   const currentQuestion = quiz.questions[currentQuestionIndex];
 
-  // FIX: Refactored the auto-advance logic to use a useCallback hook.
-  // This is a more standard and robust pattern than using a ref to hold the function,
-  // and it resolves the obscure TypeScript error about incorrect argument counts.
   const advanceToNextStep = useCallback(() => {
     if (currentQuestionIndex < quiz.questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
+      setCurrentQuestionIndex(prev => prev + 1);
       setSelectedAnswer(null);
       setIsAnswered(false);
       setIsCorrect(null);
       setInputValue('');
     } else {
-      onComplete();
+      onCompleteRef.current();
     }
-  }, [currentQuestionIndex, quiz.questions.length, onComplete]);
+  }, [currentQuestionIndex, quiz.questions.length]);
 
   useEffect(() => {
     // Auto-advance only on correct answers
     if (isCorrect) {
-      const timer = setTimeout(advanceToNextStep, 1500);
+      const timer = setTimeout(advanceToNextStep, 2000);
 
       return () => clearTimeout(timer);
     }
@@ -96,8 +99,10 @@ export const Quiz: React.FC<QuizProps> = ({ quiz, onComplete }) => {
   }, [isVoiceModeEnabled, isAnswered, currentQuestion, language, speak, startListening, handleSubmit]);
 
   useEffect(() => {
-    optionRefs.current = optionRefs.current.slice(0, currentQuestion.options.length);
-  }, [currentQuestionIndex, currentQuestion.options.length]);
+    if (currentQuestion.options) {
+        optionRefs.current = optionRefs.current.slice(0, currentQuestion.options.length);
+    }
+  }, [currentQuestionIndex, currentQuestion.options]);
 
   return (
     <div className="mt-12 pt-8 border-t-2 border-dashed border-neutral-200 animate-fade-in">
@@ -165,6 +170,12 @@ export const Quiz: React.FC<QuizProps> = ({ quiz, onComplete }) => {
               <p className="font-bold">{t.lesson.quizCorrect(lastPointsAwarded)}</p>
               <p>{currentQuestion.explanation}</p>
               {streak > 1 && <p className="font-bold mt-1">{t.lesson.quizStreak(streak)}</p>}
+               <button
+                    onClick={advanceToNextStep}
+                    className="mt-4 flex items-center justify-center gap-2 w-full sm:w-auto mx-auto bg-primary text-white font-bold py-2 px-5 rounded-lg hover:bg-primary-dark transition"
+                >
+                    {t.lesson.nextQuestionButton} <ArrowRight size={16}/>
+                </button>
             </div>
         ) : (
             <div className="mt-4 p-4 rounded-lg text-center bg-red-100 text-red-900 animate-fade-in">

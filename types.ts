@@ -86,7 +86,10 @@ export interface User {
   id: string;
   googleId: string;
   email: string;
+  password?: string;
   name: string;
+  phoneNumber?: string;
+  country?: string;
   avatarUrl?: string;
   level: LearningPath | null;
   role: UserRole;
@@ -140,12 +143,25 @@ export interface Quiz {
   questions: Question[];
 }
 
+export interface ScenarioChoice {
+  text: string;
+  response: string;
+  isOptimal: boolean;
+}
+
+export interface Scenario {
+  title: string;
+  situation: string;
+  choices: ScenarioChoice[];
+}
+
 export interface LessonContent {
   title: string;
   introduction: string;
   sections: { heading: string; content: string }[];
   summary:string;
   quiz: Quiz;
+  scenario: Scenario; // New scenario field
 }
 
 

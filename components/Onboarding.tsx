@@ -1,24 +1,20 @@
 import React, { useState, useEffect } from 'react';
 // FIX: Aliased the `User` icon to `UserIcon` to avoid a name conflict with the `User` type.
-import { Loader2, ArrowRight, GraduationCap, PartyPopper, CheckCircle, Feather, BookOpen, BrainCircuit, User as UserIcon, Users, Book, PenTool, Briefcase, ShieldCheck, BookCopy, UserPlus } from 'lucide-react';
+import { Loader2, ArrowRight, GraduationCap, PartyPopper, CheckCircle, Feather, BookOpen, BrainCircuit, User as UserIcon, Users, Book, PenTool, Briefcase, ShieldCheck, BookCopy, UserPlus, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { apiService } from '../services/apiService';
 import { LearningPath, User, UserRole } from '../types';
 import { Translation } from '../i18n';
-
-const GoogleIcon: React.FC = () => (
-  <svg viewBox="0 0 48 48" className="w-6 h-6">
-    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-    <path fill="none" d="M0 0h48v48H0z"></path>
-  </svg>
-);
 
 interface OnboardingProps {
     setUser: (user: User | null) => void;
     t: Translation;
 }
+
+const COUNTRIES = [
+    "Nigeria", "Ghana", "Kenya", "South Africa", "Egypt", "Ethiopia", 
+    "Tanzania", "Uganda", "Rwanda", "Cameroon", "Zimbabwe", 
+    "Senegal", "Ivory Coast", "United States", "United Kingdom", "Canada", "India", "Other"
+].sort();
 
 const WelcomeStep: React.FC<{ onGetStarted: () => void, t: Translation }> = ({ onGetStarted, t }) => (
     <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-100 p-4">
@@ -253,12 +249,21 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [country, setCountry] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  
+  const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetStatus, setResetStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
   const [step, setStep] = useState<'welcome' | 'auth' | 'select_role' | 'select_path' | 'create_class' | 'link_child' | 'path_assigned' | 'success_signin'>('welcome');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assignedLevel, setAssignedLevel] = useState<LearningPath | null>(null);
   const [transitionUser, setTransitionUser] = useState<User | null>(null);
-  const [signupDetails, setSignupDetails] = useState<{ name: string; email: string; role: UserRole | null }>({ name: '', email: '', role: null });
+  const [signupDetails, setSignupDetails] = useState<{ name: string; email: string; phoneNumber?: string; country?: string; password?: string; role: UserRole | null }>({ name: '', email: '', role: null });
 
   useEffect(() => {
     if (step === 'success_signin') {
@@ -272,34 +277,10 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
     }
   }, [step, transitionUser, setUser]);
 
-
-  const handleGoogleSignIn = async () => {
-    // This is a simulation. In a real app, you'd use a Google Auth library.
-    const flow = prompt("Simulate 'new' Google user or 'existing' Google user? (Type 'new' or 'existing')", 'new');
-    if (!flow) return;
-
-    const mockGoogleUser = flow.toLowerCase() === 'existing'
-        ? { name: 'Amina', email: 'amina@example.com', googleId: 'gid-amina' }
-        : { name: 'New Google User', email: `google.user-${Date.now()}@example.com`, googleId: `gid-${Date.now()}` };
-
-    if (isLoading) return;
-    setError(null);
-    setIsLoading(true);
-
-    try {
-        const existingUser = await apiService.getUserByEmail(mockGoogleUser.email);
-        if (existingUser) {
-            setTransitionUser(existingUser);
-            setStep('success_signin');
-        } else {
-            setSignupDetails({ name: mockGoogleUser.name, email: mockGoogleUser.email, role: null });
-            setStep('select_role');
-        }
-    } catch (err) {
-        setError(t.onboarding.errorGeneric);
-    } finally {
-        setIsLoading(false);
-    }
+  const validatePassword = (pwd: string): boolean => {
+      // Minimum 8 characters, at least 1 uppercase, 1 lowercase, 1 number, 1 special char
+      const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+      return regex.test(pwd);
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -311,19 +292,22 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
 
     if (authMode === 'signin') {
         try {
-            const existingUser = await apiService.getUserByEmail(email);
-            if (existingUser) {
-                setTransitionUser(existingUser);
-                setStep('success_signin');
-            } else {
-                setError(t.onboarding.errorUserNotFound);
-            }
-        } catch (err) {
-            setError(t.onboarding.errorGeneric);
+            // Using authenticate method which checks password
+            const existingUser = await apiService.authenticate(email, password);
+            setTransitionUser(existingUser);
+            setStep('success_signin');
+        } catch (err: any) {
+            setError(err.message || t.onboarding.errorGeneric);
         } finally {
             setIsLoading(false);
         }
     } else { // signup
+        if (!validatePassword(password)) {
+            setError("Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character.");
+            setIsLoading(false);
+            return;
+        }
+
         try {
             const existingUser = await apiService.getUserByEmail(email);
             if (existingUser) {
@@ -331,8 +315,8 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
                 setIsLoading(false);
                 return;
             }
-            // Temporarily store name and email, then move to role selection
-            setSignupDetails({ name, email, role: null });
+            // Temporarily store details, then move to role selection
+            setSignupDetails({ name, email, phoneNumber, country, password, role: null });
             setStep('select_role');
         } catch (err: any) {
             setError(t.onboarding.errorGeneric);
@@ -342,6 +326,18 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
     }
   };
   
+  const handleForgotPassword = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!resetEmail) return;
+      setResetStatus('sending');
+      try {
+          await apiService.resetPassword(resetEmail);
+          setResetStatus('sent');
+      } catch (err) {
+          setResetStatus('error');
+      }
+  };
+
   const handleSelectRole = async (role: UserRole) => {
       setSignupDetails(prev => ({ ...prev, role }));
 
@@ -394,6 +390,9 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
     setError(null);
     setName('');
     setEmail('');
+    setPhoneNumber('');
+    setCountry('');
+    setPassword('');
   };
   
   if (step === 'welcome') {
@@ -455,6 +454,46 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
     );
   }
 
+  // Forgot Password View
+  if (isForgotPasswordMode) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-100 p-4">
+            <div className="w-full max-w-md mx-auto">
+                <div className="bg-white rounded-2xl shadow-lg p-8 sm:p-10 text-center animate-slide-up">
+                    <Lock className="text-primary mx-auto mb-4" size={40} />
+                    <h2 className="text-2xl font-bold text-neutral-800 mb-2">Reset Password</h2>
+                    
+                    {resetStatus === 'sent' ? (
+                        <div className="py-4">
+                            <p className="text-green-600 font-semibold mb-6">If an account exists with that email, we've sent instructions to reset your password.</p>
+                            <button onClick={() => setIsForgotPasswordMode(false)} className="text-primary font-bold hover:underline">Back to Sign In</button>
+                        </div>
+                    ) : (
+                        <>
+                            <p className="text-neutral-500 mb-6">Enter your email address and we'll send you a link to reset your password.</p>
+                            <form onSubmit={handleForgotPassword} className="space-y-4">
+                                <input 
+                                    type="email" 
+                                    placeholder={t.onboarding.emailPlaceholder} 
+                                    value={resetEmail} 
+                                    onChange={e => setResetEmail(e.target.value)} 
+                                    className="w-full p-4 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary bg-white text-neutral-900 placeholder:text-neutral-400 text-lg" 
+                                    required 
+                                />
+                                {resetStatus === 'error' && <p className="text-red-500 text-sm">Failed to send reset link. Please try again.</p>}
+                                <button type="submit" disabled={resetStatus === 'sending'} className="w-full bg-primary text-white font-bold py-3 rounded-lg hover:bg-primary-dark transition flex items-center justify-center gap-2 disabled:bg-neutral-400 text-lg">
+                                    {resetStatus === 'sending' ? <Loader2 className="animate-spin" /> : "Send Reset Link"}
+                                </button>
+                            </form>
+                            <button onClick={() => setIsForgotPasswordMode(false)} className="mt-6 text-neutral-500 font-bold hover:text-neutral-800 transition">Back to Sign In</button>
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
+      );
+  }
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-100 p-4">
         <div className="w-full max-w-md mx-auto">
@@ -465,23 +504,38 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
                 </div>
                 <h2 className="text-xl font-bold text-neutral-600 mb-6">{authMode === 'signin' ? t.onboarding.signInTitle : t.onboarding.signUpTitle}</h2>
                 
-                <button onClick={handleGoogleSignIn} disabled={isLoading} className="w-full bg-white text-neutral-700 font-bold py-3 px-4 rounded-lg hover:bg-neutral-100 transition flex items-center justify-center gap-3 border-2 border-neutral-300 text-lg mb-4">
-                    <GoogleIcon />
-                    Continue with Google
-                </button>
-
-                <div className="flex items-center my-4">
-                    <hr className="flex-grow border-t border-neutral-300" />
-                    <span className="mx-4 text-neutral-500 font-semibold text-sm">OR</span>
-                    <hr className="flex-grow border-t border-neutral-300" />
-                </div>
-                
-                <form onSubmit={handleAuth} className="space-y-4">
+                <form onSubmit={handleAuth} className="space-y-4 text-left">
                     {authMode === 'signup' && (
-                        <input type="text" placeholder={t.onboarding.namePlaceholder} value={name} onChange={e => setName(e.target.value)} className="w-full p-4 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary bg-white text-neutral-900 placeholder:text-neutral-400 text-lg" required />
+                        <>
+                            <input type="text" placeholder={t.onboarding.namePlaceholder} value={name} onChange={e => setName(e.target.value)} className="w-full p-4 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary bg-white text-neutral-900 placeholder:text-neutral-400 text-lg" required />
+                            <input type="tel" placeholder="Phone Number" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} className="w-full p-4 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary bg-white text-neutral-900 placeholder:text-neutral-400 text-lg" required />
+                            <select value={country} onChange={e => setCountry(e.target.value)} className="w-full p-4 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary bg-white text-neutral-900 text-lg" required>
+                                <option value="" disabled>Select Country</option>
+                                {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </>
                     )}
                      <input type="email" placeholder={t.onboarding.emailPlaceholder} value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary bg-white text-neutral-900 placeholder:text-neutral-400 text-lg" required />
                     
+                     <div className="relative">
+                        <input 
+                            type={showPassword ? "text" : "password"} 
+                            placeholder="Password" 
+                            value={password} 
+                            onChange={e => setPassword(e.target.value)} 
+                            className="w-full p-4 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary bg-white text-neutral-900 placeholder:text-neutral-400 text-lg pr-12" 
+                            required 
+                        />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600">
+                            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </button>
+                     </div>
+                     {authMode === 'signin' && (
+                         <div className="text-right">
+                             <button type="button" onClick={() => setIsForgotPasswordMode(true)} className="text-sm font-semibold text-primary hover:underline">Forgot Password?</button>
+                         </div>
+                     )}
+
                     {error && <p className="text-red-500 text-sm font-semibold text-left pt-1">{error}</p>}
                     
                     <button type="submit" disabled={isLoading} className="w-full bg-primary text-white font-bold py-4 rounded-lg hover:bg-primary-dark transition flex items-center justify-center gap-2 disabled:bg-neutral-400 text-lg mt-2">

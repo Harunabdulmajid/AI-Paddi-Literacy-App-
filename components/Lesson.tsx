@@ -2,7 +2,7 @@ import React, { useContext, useState, useEffect, useRef } from 'react';
 import { AppContext } from './AppContext';
 import { Page, Badge, Language, LessonContent } from '../types';
 import { useTranslations, englishTranslations } from '../i18n';
-import { Quiz } from './Quiz';
+import { ScenarioChallenge } from './ScenarioChallenge';
 import { TooltipTerm } from './TooltipTerm';
 import { Award, PartyPopper, Loader2, Volume2, StopCircle } from 'lucide-react';
 import { BADGES } from '../constants';
@@ -65,7 +65,7 @@ export const Lesson: React.FC = () => {
     const [lessonState, setLessonState] = useState<LessonState>('reading');
     const [unlockedBadgesOnComplete, setUnlockedBadgesOnComplete] = useState<string[]>([]);
 
-    const [dynamicContent, setDynamicContent] = useState<Omit<LessonContent, 'quiz' | 'title'> | null>(null);
+    const [dynamicContent, setDynamicContent] = useState<Omit<LessonContent, 'quiz' | 'title' | 'scenario'> | null>(null);
     const [isLoadingContent, setIsLoadingContent] = useState(true);
     
     // TTS State
@@ -117,17 +117,17 @@ export const Lesson: React.FC = () => {
             // Fetch from API if online
             try {
                 if (language === Language.English) {
-                    const { title, quiz, ...content } = englishModuleContent;
+                    const { title, quiz, scenario, ...content } = englishModuleContent;
                     setDynamicContent(content);
                 } else {
-                    const { title, quiz, ...contentToTranslate } = englishModuleContent;
+                    const { title, quiz, scenario, ...contentToTranslate } = englishModuleContent;
                     const generatedContent = await geminiService.generateDynamicLessonContent(contentToTranslate, language);
                     setDynamicContent(generatedContent);
                 }
             } catch (error) {
                 console.error("Failed to generate dynamic content, falling back to static translations.", error);
                 if (staticModuleContent) {
-                    const { title, quiz, ...staticContent } = staticModuleContent;
+                    const { title, quiz, scenario, ...staticContent } = staticModuleContent;
                     setDynamicContent(staticContent);
                 }
             } finally {
@@ -236,9 +236,9 @@ export const Lesson: React.FC = () => {
         )
     }
 
-    const displayContent = { ...dynamicContent, title: staticModuleContent!.title, quiz: staticModuleContent!.quiz };
+    const displayContent = { ...dynamicContent, title: staticModuleContent!.title, quiz: staticModuleContent!.quiz, scenario: staticModuleContent!.scenario };
 
-    const handleCompleteQuiz = async () => {
+    const handleCompleteLesson = async () => {
         if (activeModuleId && user && !user.completedModules.includes(activeModuleId)) {
             await completeModule(activeModuleId);
         }
@@ -320,13 +320,13 @@ export const Lesson: React.FC = () => {
                             onClick={() => setLessonState('quizzing')}
                             className="bg-primary hover:bg-primary-dark text-white font-bold py-4 px-8 rounded-xl text-lg transition-transform active:scale-95"
                         >
-                            {t.lesson.startQuizButton}
+                            {t.lesson.startQuizButton.replace("Quiz", "Challenge")}
                         </button>
                     </div>
                 )}
                
-               {lessonState === 'quizzing' && (
-                    <Quiz quiz={displayContent.quiz} onComplete={handleCompleteQuiz} />
+               {lessonState === 'quizzing' && displayContent.scenario && (
+                    <ScenarioChallenge scenario={displayContent.scenario} onComplete={handleCompleteLesson} />
                )}
             </div>
         </div>
