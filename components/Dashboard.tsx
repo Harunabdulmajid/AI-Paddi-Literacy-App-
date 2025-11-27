@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { AppContext } from './AppContext';
 import { CURRICULUM_MODULES, LEARNING_PATHS } from '../constants';
 import { ModuleCard } from './ModuleCard';
-import { Page, Module, UserRole, AppContextType } from '../types';
+import { Page, Module, UserRole, AppContextType, LearningPath } from '../types';
 import { Sword, UserCircle, ArrowRight, BarChart3, BookCopy, Star, Users, Wallet, BookMarked, Mic, Briefcase, Sparkles, ClipboardList, MessageSquare } from 'lucide-react';
 import { useTranslations } from '../i18n';
 
@@ -34,9 +34,12 @@ const ProgressSummary: React.FC = () => {
     const { user, setCurrentPage, setActiveModuleId } = context;
     const t = useTranslations();
     
-    if (!user || !user.level) return null;
+    if (!user) return null;
     
-    const userPathModules = LEARNING_PATHS[user.level].levels.flat();
+    // Default to Explorer if level is missing to prevent crash
+    const level = user.level || LearningPath.Explorer;
+    
+    const userPathModules = LEARNING_PATHS[level].levels.flat();
     const completedCount = user.completedModules.filter(id => userPathModules.includes(id)).length;
     const totalCount = userPathModules.length;
     const progressPercentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
@@ -80,8 +83,8 @@ export const Dashboard: React.FC = () => {
   const { user, setCurrentPage, openUpgradeModal } = context;
   const t = useTranslations();
 
-  if (!user || !user.level) {
-    return null; // Or a loading/error state if level can be null temporarily
+  if (!user) {
+    return null; 
   }
   
   const handleFeatureClick = (page: Page, title: string, isPro: boolean) => {
@@ -92,7 +95,9 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const userPathLevels = LEARNING_PATHS[user.level].levels;
+  // Default to Explorer if level is missing to prevent crash
+  const level = user.level || LearningPath.Explorer;
+  const userPathLevels = LEARNING_PATHS[level].levels;
     
   const subGreeting = user.role === UserRole.Parent ? t.dashboard.subGreetingParent : t.dashboard.subGreeting;
 

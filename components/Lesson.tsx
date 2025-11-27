@@ -1,18 +1,18 @@
-import React, { useContext, useState, useEffect, useRef } from 'react';
+import React, { useContext, useState, useEffect, useRef, useMemo } from 'react';
 import { AppContext } from './AppContext';
-import { Page, Badge, Language, LessonContent } from '../types';
+import { Page, Badge, Language, LessonContent, LearningPath } from '../types';
 import { useTranslations, englishTranslations } from '../i18n';
 import { ScenarioChallenge } from './ScenarioChallenge';
 import { TooltipTerm } from './TooltipTerm';
-import { Award, PartyPopper, Loader2, Volume2, StopCircle } from 'lucide-react';
-import { BADGES } from '../constants';
+import { Award, PartyPopper, Loader2, Volume2, StopCircle, ArrowRight } from 'lucide-react';
+import { BADGES, LEARNING_PATHS } from '../constants';
 import { BadgeIcon } from './BadgeIcon';
 import { geminiService } from '../services/geminiService';
 import { dbService } from '../services/db';
 
 type LessonState = 'reading' | 'quizzing' | 'complete';
 
-const CompletionModal: React.FC<{ onAcknowledge: () => void; points: number, unlockedBadgeIds: string[] }> = ({ onAcknowledge, points, unlockedBadgeIds }) => {
+const CompletionModal: React.FC<{ onAcknowledge: () => void; points: number, unlockedBadgeIds: string[], onNextLesson?: () => void }> = ({ onAcknowledge, points, unlockedBadgeIds, onNextLesson }) => {
     const t = useTranslations();
     const unlockedBadges: Badge[] = unlockedBadgeIds.map(id => BADGES[id]).filter(Boolean);
 
@@ -34,12 +34,23 @@ const CompletionModal: React.FC<{ onAcknowledge: () => void; points: number, unl
                         </div>
                     </div>
                 )}
-                <button 
-                    onClick={onAcknowledge}
-                    className="mt-8 w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded-xl text-lg transition-transform active:scale-95"
-                >
-                    {t.lesson.returnToDashboardButton}
-                </button>
+                
+                <div className="flex flex-col gap-3 mt-8">
+                    {onNextLesson && (
+                        <button 
+                            onClick={onNextLesson}
+                            className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded-xl text-lg transition-transform active:scale-95 flex items-center justify-center gap-2"
+                        >
+                            Next Lesson <ArrowRight size={20} />
+                        </button>
+                    )}
+                    <button 
+                        onClick={onAcknowledge}
+                        className={`w-full font-bold py-3 px-6 rounded-xl text-lg transition-transform active:scale-95 ${onNextLesson ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200' : 'bg-primary hover:bg-primary-dark text-white'}`}
+                    >
+                        {t.lesson.returnToDashboardButton}
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -146,6 +157,26 @@ export const Lesson: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lessonState, user?.badges]);
 
+    // Calculate next module
+    const nextModuleId = useMemo(() => {
+        if (!user || !activeModuleId) return null;
+        
+        // Default to Explorer if level is null/undefined to ensure continuity
+        const currentLevel = user.level || LearningPath.Explorer;
+        const pathData = LEARNING_PATHS[currentLevel];
+        
+        // Safety check if path data is missing
+        if (!pathData) return null;
+
+        const pathModules = pathData.levels.flat();
+        const currentIndex = pathModules.indexOf(activeModuleId);
+        
+        if (currentIndex !== -1 && currentIndex < pathModules.length - 1) {
+            return pathModules[currentIndex + 1];
+        }
+        return null;
+    }, [user, activeModuleId]);
+
     const playRawAudio = async (pcmData: Uint8Array) => {
         const ctx = audioContextRef.current;
         if (!ctx) return;
@@ -250,6 +281,14 @@ export const Lesson: React.FC = () => {
         setActiveModuleId(null);
     }
 
+    const handleNextLesson = () => {
+        if (nextModuleId) {
+            setActiveModuleId(nextModuleId);
+            setLessonState('reading');
+            window.scrollTo(0, 0);
+        }
+    }
+
     const renderContentWithTooltips = (text: string) => {
         const tooltips = t.tooltips;
         const terms = Object.keys(tooltips);
@@ -286,7 +325,14 @@ export const Lesson: React.FC = () => {
 
     return (
         <div className="container mx-auto p-4 md:p-8">
-            {lessonState === 'complete' && <CompletionModal onAcknowledge={handleAcknowledgeCompletion} points={25} unlockedBadgeIds={unlockedBadgesOnComplete} />}
+            {lessonState === 'complete' && 
+                <CompletionModal 
+                    onAcknowledge={handleAcknowledgeCompletion} 
+                    points={25} 
+                    unlockedBadgeIds={unlockedBadgesOnComplete} 
+                    onNextLesson={nextModuleId ? handleNextLesson : undefined}
+                />
+            }
             <div className="max-w-4xl mx-auto bg-white p-8 md:p-12 rounded-2xl shadow-lg">
                 <h1 className="text-4xl md:text-5xl font-extrabold text-neutral-800 mb-4">{displayContent.title}</h1>
                 <div className="group flex gap-2 items-start">

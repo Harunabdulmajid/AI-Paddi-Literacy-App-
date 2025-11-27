@@ -68,7 +68,7 @@ export const geminiService = {
       }
   },
 
-  async generateDynamicLessonContent(englishContent: Omit<LessonContent, 'quiz' | 'title'>, language: Language): Promise<Omit<LessonContent, 'quiz' | 'title'>> {
+  async generateDynamicLessonContent(englishContent: Omit<LessonContent, 'quiz' | 'title' | 'scenario'>, language: Language): Promise<Omit<LessonContent, 'quiz' | 'title' | 'scenario'>> {
     const prompt = `
       You are an expert curriculum developer specializing in AI literacy for diverse audiences.
       Your task is to rewrite the following lesson content for a learner who speaks ${language}.

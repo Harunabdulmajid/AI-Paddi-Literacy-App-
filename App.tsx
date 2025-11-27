@@ -5,7 +5,7 @@ import { Header } from './components/Header';
 import { PeerPractice } from './components/Multiplayer';
 import { AiVsHumanGame } from './components/AiVsHumanGame';
 import { Profile } from './components/Profile';
-import { AppContextType, User, Language, Page, Badge, GameSession, Module, Transaction, UserRole } from './types';
+import { AppContextType, User, Language, Page, Badge, GameSession, Module, Transaction, UserRole, LearningPath } from './types';
 import { ArrowLeft, Loader2, Send } from 'lucide-react';
 import { translations, englishTranslations } from './i18n';
 import { Lesson } from './components/Lesson';
@@ -280,8 +280,10 @@ const App: React.FC = () => {
   }, [user, isOnline, showToast]);
 
   const completeModule = useCallback(async (moduleId: string) => {
-    if (!user || user.completedModules.includes(moduleId) || !user.level) return;
+    // FIX: Removed strict !user.level check to allow progression for users with null levels (defaulting to Explorer).
+    if (!user || user.completedModules.includes(moduleId)) return;
     
+    const level = user.level || LearningPath.Explorer;
     const updatedCompletedModules = [...user.completedModules, moduleId];
     
     addTransaction({
@@ -305,7 +307,7 @@ const App: React.FC = () => {
     }
     
     // Check for path completion
-    const userPathModules = LEARNING_PATHS[user.level].levels.flat();
+    const userPathModules = LEARNING_PATHS[level].levels.flat();
     const completedInPath = updatedCompletedModules.filter(id => userPathModules.includes(id));
     if (completedInPath.length === userPathModules.length) {
       awardBadge('ai-graduate');
@@ -322,8 +324,12 @@ const App: React.FC = () => {
 
       if (language !== Language.English) {
           try {
-              const translatedContent = await geminiService.generateDynamicLessonContent(contentToSave, language);
-              await dbService.saveContent(moduleId, language, translatedContent);
+              // Explicitly remove scenario before sending to translation service to match expected type
+              const { scenario, ...contentForTranslation } = contentToSave;
+              const translatedContent = await geminiService.generateDynamicLessonContent(contentForTranslation, language);
+              
+              // Merge scenario back from English content (scenario is not translated by AI currently)
+              await dbService.saveContent(moduleId, language, { ...translatedContent, scenario: contentToSave.scenario });
           } catch (error) {
               console.error(`Failed to download translated content for ${moduleId}`, error);
           }

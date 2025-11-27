@@ -425,7 +425,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
                 <p className="text-neutral-500 mt-2 mb-6 text-lg">{t.onboarding.pathAssignedDescription}</p>
                 <div className="bg-primary/10 text-primary font-bold text-xl p-4 rounded-xl flex items-center justify-center gap-3">
                     <GraduationCap size={24} />
-                    <span>{t.levels[assignedLevel || LearningPath.Explorer]} Path</span>
+                    <span>{t.paths[assignedLevel || LearningPath.Explorer].name} Path</span>
                 </div>
                 <button 
                   onClick={() => { if (transitionUser) setUser(transitionUser); }}
