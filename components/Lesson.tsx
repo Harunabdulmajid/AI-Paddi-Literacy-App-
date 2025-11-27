@@ -2,7 +2,7 @@ import React, { useContext, useState, useEffect, useRef, useMemo } from 'react';
 import { AppContext } from './AppContext';
 import { Page, Badge, Language, LessonContent, LearningPath } from '../types';
 import { useTranslations, englishTranslations } from '../i18n';
-import { ScenarioChallenge } from './ScenarioChallenge';
+// import { ScenarioChallenge } from './ScenarioChallenge'; // Temporarily disabled
 import { TooltipTerm } from './TooltipTerm';
 import { Award, PartyPopper, Loader2, Volume2, StopCircle, ArrowRight } from 'lucide-react';
 import { BADGES, LEARNING_PATHS } from '../constants';
@@ -328,7 +328,7 @@ export const Lesson: React.FC = () => {
             {lessonState === 'complete' && 
                 <CompletionModal 
                     onAcknowledge={handleAcknowledgeCompletion} 
-                    points={25} 
+                    points={50} // Updated to 50 points as we skip the 25pt challenge
                     unlockedBadgeIds={unlockedBadgesOnComplete} 
                     onNextLesson={nextModuleId ? handleNextLesson : undefined}
                 />
@@ -363,17 +363,18 @@ export const Lesson: React.FC = () => {
                 {lessonState === 'reading' && (
                      <div className="mt-12 text-center">
                         <button 
-                            onClick={() => setLessonState('quizzing')}
-                            className="bg-primary hover:bg-primary-dark text-white font-bold py-4 px-8 rounded-xl text-lg transition-transform active:scale-95"
+                            onClick={handleCompleteLesson}
+                            className="bg-primary hover:bg-primary-dark text-white font-bold py-4 px-8 rounded-xl text-lg transition-transform active:scale-95 flex items-center justify-center gap-2 mx-auto"
                         >
-                            {t.lesson.startQuizButton.replace("Quiz", "Challenge")}
+                            {t.lesson.completeLessonButton} <ArrowRight size={20} />
                         </button>
                     </div>
                 )}
                
-               {lessonState === 'quizzing' && displayContent.scenario && (
+               {/* Scenario Challenge Temporarily Disabled */}
+               {/* {lessonState === 'quizzing' && displayContent.scenario && (
                     <ScenarioChallenge scenario={displayContent.scenario} onComplete={handleCompleteLesson} />
-               )}
+               )} */}
             </div>
         </div>
     );
