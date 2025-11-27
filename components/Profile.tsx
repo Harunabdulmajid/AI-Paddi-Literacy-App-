@@ -20,25 +20,33 @@ const Certificate: React.FC<{ user: User, certificateRef: React.RefObject<HTMLDi
     const isDistinction = user.certificateLevel === 'distinction';
 
     return (
-        <div ref={certificateRef} className={`bg-white p-6 md:p-8 rounded-xl border-2 ${isDistinction ? 'border-amber-400' : 'border-primary'} relative overflow-hidden`}>
+        <div ref={certificateRef} className={`bg-white p-4 sm:p-6 md:p-8 rounded-xl border-4 ${isDistinction ? 'border-amber-400' : 'border-primary'} relative overflow-hidden`}>
             <div className="absolute top-0 left-0 w-full h-full bg-neutral-50 z-0 opacity-50"></div>
-            <div className={`absolute -top-10 -right-10 w-40 h-40 ${isDistinction ? 'bg-amber-400/10' : 'bg-primary/10'} rounded-full z-0`}></div>
-            <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-secondary/10 rounded-full z-0"></div>
+            <div className={`absolute -top-10 -right-10 w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 ${isDistinction ? 'bg-amber-400/10' : 'bg-primary/10'} rounded-full z-0`}></div>
+            <div className="absolute -bottom-12 -left-12 w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 bg-secondary/10 rounded-full z-0"></div>
             
             <div className="relative z-10 text-center">
-                <div className={`flex justify-center items-center gap-3 ${isDistinction ? 'text-amber-500' : 'text-primary'}`}>
-                  <ShieldCheck size={40} />
-                  <h3 className="text-2xl md:text-3xl font-bold">{t.profile.certificateTitleSingle}{isDistinction && ' with Distinction'}</h3>
+                <div className={`flex flex-col sm:flex-row justify-center items-center gap-2 sm:gap-3 ${isDistinction ? 'text-amber-500' : 'text-primary'} mb-2`}>
+                  <ShieldCheck className="w-10 h-10 sm:w-12 sm:h-12" />
+                  <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-center leading-tight">{t.profile.certificateTitleSingle}{isDistinction && ' with Distinction'}</h3>
                 </div>
-                <p className="text-neutral-500 mt-1 font-semibold">{t.profile.certificateIssuedBy('AI Paddi')}</p>
-                <p className="text-neutral-500 mt-4">{t.profile.certificateFor}</p>
-                <p className="text-3xl md:text-4xl font-extrabold text-neutral-800 my-4 md:my-6 border-y-2 border-neutral-200 py-4">{user.name}</p>
-                <p className="text-base md:text-lg text-neutral-600 font-medium">{t.profile.certificateCourseName}</p>
-                <div className="flex justify-center items-center gap-2 mt-4 text-secondary">
-                    <CheckCircle size={24} />
-                    <p className="font-bold">{t.profile.certificateCompletedOn(completionDate)}</p>
+                
+                <p className="text-sm sm:text-base text-neutral-500 mt-1 font-semibold">{t.profile.certificateIssuedBy('AI Paddi')}</p>
+                
+                <p className="text-sm sm:text-base text-neutral-500 mt-4 sm:mt-6 italic">{t.profile.certificateFor}</p>
+                
+                <p className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-neutral-800 my-3 sm:my-5 border-y-2 border-neutral-200 py-3 sm:py-5 break-words">
+                    {user.name}
+                </p>
+                
+                <p className="text-sm sm:text-lg text-neutral-600 font-medium px-4">{t.profile.certificateCourseName}</p>
+                
+                <div className="flex justify-center items-center gap-2 mt-4 sm:mt-6 text-secondary">
+                    <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6" />
+                    <p className="font-bold text-sm sm:text-base">{t.profile.certificateCompletedOn(completionDate)}</p>
                 </div>
-                <p className="text-xs text-neutral-400 mt-6">{t.profile.certificateId}: {certificateId}</p>
+                
+                <p className="text-[10px] sm:text-xs text-neutral-400 mt-6 sm:mt-8 font-mono">{t.profile.certificateId}: {certificateId}</p>
             </div>
         </div>
     );
@@ -381,10 +389,10 @@ export const Profile: React.FC = () => {
                                 <div>
                                     <Certificate user={user} certificateRef={certificateRef} />
                                     <div className="flex flex-col sm:flex-row gap-3 mt-4 sm:justify-end">
-                                        <button onClick={handleDownload} className="flex items-center justify-center gap-2 bg-neutral-700 text-white font-bold py-3 px-5 rounded-lg hover:bg-neutral-800 transition text-base" aria-label="Download certificate">
+                                        <button onClick={handleDownload} className="flex items-center justify-center gap-2 bg-neutral-700 text-white font-bold py-3 px-5 rounded-lg hover:bg-neutral-800 transition text-base w-full sm:w-auto" aria-label="Download certificate">
                                             <Download size={20} /> {t.profile.downloadButton}
                                         </button>
-                                        <button className="flex items-center justify-center gap-2 bg-primary text-white font-bold py-3 px-5 rounded-lg hover:bg-primary-dark transition text-base" aria-label="Share certificate">
+                                        <button className="flex items-center justify-center gap-2 bg-primary text-white font-bold py-3 px-5 rounded-lg hover:bg-primary-dark transition text-base w-full sm:w-auto" aria-label="Share certificate">
                                             <Share2 size={20} /> {t.profile.shareButton}
                                         </button>
                                     </div>
