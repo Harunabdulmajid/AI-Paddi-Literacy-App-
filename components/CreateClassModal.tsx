@@ -38,7 +38,7 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onCl
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
       <div 
-        className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 max-w-md w-full transform transition-all animate-slide-up relative" 
+        className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 max-w-md w-full transform transition-all animate-slide-up relative max-h-[90vh] overflow-y-auto" 
         onClick={(e) => e.stopPropagation()}
       >
         <button onClick={onClose} className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-700">

@@ -18,16 +18,16 @@ const CompletionModal: React.FC<{ onAcknowledge: () => void; points: number, unl
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center transform transition-all animate-slide-up">
+            <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 max-w-md w-full text-center transform transition-all animate-slide-up max-h-[90vh] overflow-y-auto">
                 <PartyPopper className="text-accent mx-auto" size={48} />
-                <h2 className="text-3xl font-extrabold text-neutral-800 mt-4">{t.lesson.completionModalTitle}</h2>
+                <h2 className="text-2xl md:text-3xl font-extrabold text-neutral-800 mt-4">{t.lesson.completionModalTitle}</h2>
                 <p className="text-lg text-secondary font-bold mt-4 flex items-center justify-center gap-2">
                     <Award size={24} /> {t.lesson.completionModalPoints(points)}
                 </p>
                 {unlockedBadges.length > 0 && (
                     <div className="mt-6">
                         <h3 className="font-bold text-neutral-700">{t.lesson.badgeUnlocked}</h3>
-                        <div className="flex justify-center gap-4 mt-2">
+                        <div className="flex justify-center gap-4 mt-2 flex-wrap">
                             {unlockedBadges.map(badge => (
                                 <BadgeIcon key={badge.id} badge={badge} />
                             ))}
@@ -333,8 +333,8 @@ export const Lesson: React.FC = () => {
                     onNextLesson={nextModuleId ? handleNextLesson : undefined}
                 />
             }
-            <div className="max-w-4xl mx-auto bg-white p-8 md:p-12 rounded-2xl shadow-lg">
-                <h1 className="text-4xl md:text-5xl font-extrabold text-neutral-800 mb-4">{displayContent.title}</h1>
+            <div className="max-w-4xl mx-auto bg-white p-6 md:p-12 rounded-2xl shadow-lg">
+                <h1 className="text-3xl md:text-5xl font-extrabold text-neutral-800 mb-4 leading-tight">{displayContent.title}</h1>
                 <div className="group flex gap-2 items-start">
                     <p className="text-lg md:text-xl text-neutral-600 italic border-l-4 border-primary pl-4">{renderContentWithTooltips(displayContent.introduction)}</p>
                     <ReadAloudButton sectionKey="introduction" text={displayContent.introduction} />
@@ -355,7 +355,7 @@ export const Lesson: React.FC = () => {
                 <div className="mt-12 pt-8 border-t border-neutral-200 group">
                     <h3 className="text-xl font-bold text-neutral-800 mb-3">Key Takeaway</h3>
                     <div className="flex gap-2 items-start">
-                        <p className="bg-primary/10 text-primary-dark font-medium p-6 rounded-xl flex-grow">{renderContentWithTooltips(displayContent.summary)}</p>
+                        <p className="bg-primary/10 text-primary-dark font-medium p-4 md:p-6 rounded-xl flex-grow">{renderContentWithTooltips(displayContent.summary)}</p>
                         <ReadAloudButton sectionKey="summary" text={displayContent.summary} />
                     </div>
                 </div>
@@ -364,7 +364,7 @@ export const Lesson: React.FC = () => {
                      <div className="mt-12 text-center">
                         <button 
                             onClick={handleCompleteLesson}
-                            className="bg-primary hover:bg-primary-dark text-white font-bold py-4 px-8 rounded-xl text-lg transition-transform active:scale-95 flex items-center justify-center gap-2 mx-auto"
+                            className="bg-primary hover:bg-primary-dark text-white font-bold py-4 px-8 rounded-xl text-lg transition-transform active:scale-95 flex items-center justify-center gap-2 mx-auto w-full md:w-auto"
                         >
                             {t.lesson.completeLessonButton} <ArrowRight size={20} />
                         </button>

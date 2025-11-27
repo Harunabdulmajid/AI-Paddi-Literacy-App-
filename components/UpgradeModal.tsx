@@ -81,7 +81,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, fea
     if (status === 'success') {
          return (
              <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={handleClose}>
-                <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center transform transition-all animate-slide-up" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center transform transition-all animate-slide-up max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                     <CheckCircle className="text-secondary mx-auto" size={48} />
                     <h2 className="text-3xl font-extrabold text-neutral-800 mt-4">{t.proPlan.successTitle}</h2>
                     <p className="text-lg text-neutral-600 mt-2">{t.proPlan.successDescription}</p>
@@ -109,7 +109,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, fea
         />
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={handleClose}>
             <div 
-                className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 max-w-lg w-full transform transition-all animate-slide-up relative" 
+                className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 max-w-lg w-full transform transition-all animate-slide-up relative max-h-[90vh] overflow-y-auto" 
                 onClick={(e) => e.stopPropagation()}
             >
                 <button onClick={handleClose} className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-700">

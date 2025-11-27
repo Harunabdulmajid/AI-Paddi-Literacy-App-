@@ -83,9 +83,9 @@ const OfflineIndicator: React.FC = () => {
     const title = isOnline ? t.offline.onlineIndicator : t.offline.offlineIndicator;
 
     return (
-        <div title={title} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${isOnline ? 'bg-green-100 text-green-800' : 'bg-neutral-200 text-neutral-600'}`}>
+        <div title={title} className={`flex items-center gap-2 px-2 md:px-3 py-1.5 rounded-lg text-sm font-semibold ${isOnline ? 'bg-green-100 text-green-800' : 'bg-neutral-200 text-neutral-600'}`}>
             {isOnline ? <Wifi size={16} /> : <WifiOff size={16} />}
-            <span className="hidden sm:inline">{isOnline ? "Online" : "Offline"}</span>
+            <span className="hidden lg:inline">{isOnline ? "Online" : "Offline"}</span>
         </div>
     );
 }
@@ -100,7 +100,7 @@ const VoiceIndicator: React.FC = () => {
     if (!isVoiceModeEnabled) return null;
 
     return (
-        <div title={isListening ? t.voice.listening : t.voice.voiceModeActive} className="p-2 text-primary">
+        <div title={isListening ? t.voice.listening : t.voice.voiceModeActive} className="p-1 md:p-2 text-primary">
             <Mic size={24} className={isListening ? 'animate-pulse' : ''} />
         </div>
     );
@@ -138,24 +138,24 @@ export const Header: React.FC<{ onSettingsClick: () => void }> = ({ onSettingsCl
 
   return (
     <header className="bg-white/90 backdrop-blur-lg sticky top-0 z-20 shadow-sm p-3 md:p-4 border-b border-neutral-200">
-      <div className="container mx-auto flex justify-between items-center">
-        <div className="flex items-center gap-2">
+      <div className="container mx-auto flex justify-between items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <GraduationCap className="text-primary" size={28} />
           <h1 className="text-xl md:text-2xl font-bold text-neutral-800"><span className="hidden sm:inline">AI </span>Kasahorow</h1>
         </div>
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
           <OfflineIndicator />
-          <div className="flex items-center gap-1 md:gap-2">
+          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
             <Award className="text-accent" size={22} />
             <span className="font-bold text-neutral-700 text-base md:text-lg">{user.points} <span className="hidden sm:inline">{t.common.pointsAbbr}</span></span>
           </div>
           
-          <div className="relative">
+          <div className="relative flex-shrink-0">
             <Languages className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" size={18} />
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value as Language)}
-              className="pl-8 pr-3 py-1.5 border border-neutral-300 rounded-lg bg-white text-neutral-700 text-sm md:text-base font-medium focus:ring-2 focus:ring-primary focus:outline-none appearance-none"
+              className="pl-8 pr-3 py-1.5 border border-neutral-300 rounded-lg bg-white text-neutral-700 text-sm md:text-base font-medium focus:ring-2 focus:ring-primary focus:outline-none appearance-none max-w-[100px] sm:max-w-none text-ellipsis"
               aria-label="Select language"
             >
               {Object.values(Language).map((lang) => (
@@ -167,11 +167,11 @@ export const Header: React.FC<{ onSettingsClick: () => void }> = ({ onSettingsCl
           </div>
 
           <VoiceIndicator />
-          <button onClick={onSettingsClick} className="p-2 text-neutral-500 hover:text-primary transition-colors" aria-label={t.header.settings}>
+          <button onClick={onSettingsClick} className="p-2 text-neutral-500 hover:text-primary transition-colors flex-shrink-0" aria-label={t.header.settings}>
             <Settings size={24}/>
           </button>
 
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative flex-shrink-0" ref={dropdownRef}>
             <button onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="rounded-full ring-2 ring-offset-2 ring-transparent hover:ring-primary transition-all">
                 <UserAvatar name={user.name} avatarId={user.avatarId} avatarUrl={user.avatarUrl} />
             </button>
