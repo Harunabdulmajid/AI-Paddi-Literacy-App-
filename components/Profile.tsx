@@ -390,7 +390,7 @@ export const Profile: React.FC = () => {
                 isOpen={isPathModalOpen}
                 onClose={() => setIsPathModalOpen(false)}
                 onSelect={handlePathSelect}
-                currentPath={user.level!}
+                currentPath={user.level || LearningPath.Explorer}
             />
             <ConfirmationModal
                 isOpen={isPathConfirmModalOpen}
@@ -512,7 +512,7 @@ export const Profile: React.FC = () => {
                             <div className="flex justify-between items-start">
                                 <div>
                                     <h4 className="text-xl md:text-2xl font-bold text-neutral-800 mb-1">{t.profile.learningPathTitle}</h4>
-                                    <p className="font-bold text-lg text-primary">{t.paths[user.level!].name}</p>
+                                    <p className="font-bold text-lg text-primary">{t.paths[user.level || LearningPath.Explorer].name}</p>
                                 </div>
                                 <button onClick={() => setIsPathModalOpen(true)} className="font-semibold text-sm text-primary hover:underline">{t.profile.changePath}</button>
                             </div>

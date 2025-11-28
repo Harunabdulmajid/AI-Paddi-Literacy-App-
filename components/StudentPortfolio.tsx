@@ -6,6 +6,7 @@ import { UserAvatar } from './Header';
 import { BadgeIcon } from './BadgeIcon';
 import { Download, Loader2, CheckSquare, GraduationCap } from 'lucide-react';
 import * as htmlToImage from 'html-to-image';
+import { LearningPath } from '../types';
 
 export const StudentPortfolio: React.FC = () => {
     const context = useContext(AppContext);
@@ -65,7 +66,7 @@ export const StudentPortfolio: React.FC = () => {
                             <UserAvatar name={user.name} avatarId={user.avatarId} className="w-24 h-24 text-4xl" />
                             <div>
                                 <h3 className="text-3xl font-extrabold text-neutral-800 text-center sm:text-left">{user.name}</h3>
-                                <p className="text-lg font-semibold text-primary text-center sm:text-left">{t.paths[user.level!].name} Path</p>
+                                <p className="text-lg font-semibold text-primary text-center sm:text-left">{t.paths[user.level || LearningPath.Explorer].name} Path</p>
                             </div>
                         </div>
 

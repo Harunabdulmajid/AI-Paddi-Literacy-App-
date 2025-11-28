@@ -2,7 +2,7 @@ import React, { useContext, useState, useEffect } from 'react';
 // FIX: Correct the import path for AppContext.
 import { AppContext } from './AppContext';
 import { useTranslations } from '../i18n';
-import { Page, Module, User, AppContextType } from '../types';
+import { Page, Module, User, AppContextType, LearningPath } from '../types';
 import { ArrowRight, BookOpen, Briefcase, Users, GraduationCap, CheckSquare, Award, BookMarked, UserPlus, Loader2 } from 'lucide-react';
 import { LEARNING_PATHS, CURRICULUM_MODULES } from '../constants';
 import { ParentGuideModal } from './ParentGuideModal';
@@ -146,7 +146,7 @@ export const ParentDashboard: React.FC = () => {
                         <div className="bg-primary/10 p-4 rounded-xl">
                             <GraduationCap className="text-primary mx-auto mb-2" size={32}/>
                             <p className="text-sm font-semibold text-primary/80">{t.parentDashboard.currentPath}</p>
-                            <p className="text-xl font-bold text-primary">{t.paths[childData.level!].name}</p>
+                            <p className="text-xl font-bold text-primary">{t.paths[childData.level || LearningPath.Explorer].name}</p>
                         </div>
                         <div className="bg-secondary/10 p-4 rounded-xl">
                             <CheckSquare className="text-secondary mx-auto mb-2" size={32}/>
