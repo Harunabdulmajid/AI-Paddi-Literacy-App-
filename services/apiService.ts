@@ -121,7 +121,7 @@ export const apiService = {
       }
   },
 
-  async signInWithGoogle(): Promise<User> {
+  async signInWithGoogle(): Promise<{ user: User | null, googleCreds: { uid: string, email: string, displayName: string, photoURL: string | null } }> {
       try {
           const result = await signInWithPopup(auth, googleProvider);
           const firebaseUser = result.user;
@@ -131,36 +131,16 @@ export const apiService = {
           const userDoc = await getDoc(userDocRef);
 
           if (userDoc.exists()) {
-              return userDoc.data() as User;
-          } else {
-              // Create new user from Google profile
-              const newUser: User = {
-                  id: firebaseUser.uid,
-                  googleId: firebaseUser.uid,
-                  email: lowerEmail,
-                  name: firebaseUser.displayName || 'User',
-                  role: UserRole.Student, // Default role
-                  level: LearningPath.Explorer, // Default level
-                  points: 0,
-                  completedModules: [],
-                  badges: [],
-                  multiplayerStats: { wins: 0, gamesPlayed: 0 },
-                  wallet: initializeDefaultWallet(0),
-                  lastLoginDate: getTodayDateString(),
-                  loginStreak: 1,
-                  certificateLevel: 'basic',
-                  theme: 'default',
-                  avatarId: 'avatar-01', // Default avatar ID
-                  avatarUrl: firebaseUser.photoURL || undefined,
-                  unlockedVoices: [],
-                  tutorTokens: 0,
-                  quizRewinds: 0,
-                  unlockedBanners: [],
-                  unlockedThemes: ['default'],
-                  isPro: false,
+              return { 
+                  user: userDoc.data() as User, 
+                  googleCreds: { uid: firebaseUser.uid, email: lowerEmail, displayName: firebaseUser.displayName || '', photoURL: firebaseUser.photoURL } 
               };
-              await setDoc(userDocRef, newUser);
-              return newUser;
+          } else {
+              // Return credentials to allow onboarding
+              return { 
+                  user: null, 
+                  googleCreds: { uid: firebaseUser.uid, email: lowerEmail, displayName: firebaseUser.displayName || '', photoURL: firebaseUser.photoURL } 
+              };
           }
       } catch (error) {
           console.error("Google Sign In Error:", error);
@@ -244,17 +224,38 @@ export const apiService = {
     }
   },
 
-  async createUser(details: { name: string, email: string, password?: string, level: LearningPath | null, role: UserRole, googleId: string, phoneNumber?: string, country?: string }): Promise<User> {
+  async createUser(details: { name: string, email: string, password?: string, level: LearningPath | null, role: UserRole, googleId: string, phoneNumber?: string, country?: string, photo?: File | null, avatarUrl?: string }): Promise<User> {
     try {
-        if (!details.password) throw new Error("Password required");
+        let firebaseUser;
+        
+        if (details.password) {
+            // Email/Password Signup
+            const userCredential = await createUserWithEmailAndPassword(auth, details.email, details.password);
+            firebaseUser = userCredential.user;
+            await sendEmailVerification(firebaseUser);
+        } else {
+            // Google Signup (User already signed in via popup)
+            firebaseUser = auth.currentUser;
+            if (!firebaseUser || firebaseUser.email?.toLowerCase() !== details.email.toLowerCase()) {
+                throw new Error("Authentication error. Please try signing up again.");
+            }
+        }
 
-        // Firebase Auth Create
-        const userCredential = await createUserWithEmailAndPassword(auth, details.email, details.password);
-        const firebaseUser = userCredential.user;
         const lowercasedEmail = details.email.toLowerCase();
 
-        // Send verification email
-        await sendEmailVerification(firebaseUser);
+        // Upload Profile Picture if exists
+        let avatarUrl: string | undefined = details.avatarUrl; // Start with provided URL (e.g. from Google)
+        
+        if (details.photo) {
+            try {
+                const storageRef = ref(storage, `user_uploads/${firebaseUser.uid}/profile_picture`);
+                await uploadBytes(storageRef, details.photo);
+                avatarUrl = await getDownloadURL(storageRef);
+            } catch (uploadError) {
+                console.error("Failed to upload profile picture during signup:", uploadError);
+                // Continue creating user even if photo upload fails
+            }
+        }
 
         // Create Firestore Entry IMMEDIATELY
         const newUser: User = {
@@ -264,6 +265,7 @@ export const apiService = {
             name: details.name,
             phoneNumber: details.phoneNumber,
             country: details.country,
+            avatarUrl: avatarUrl,
             level: details.level,
             role: details.role,
             points: 0,
@@ -286,15 +288,17 @@ export const apiService = {
 
         await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
 
-        // Sign out immediately so they have to login after verifying
-        await signOut(auth);
-        
-        // Throw specific error to trigger UI flow
-        throw new Error("EmailVerificationRequired");
+        // If password was used, require verification. Google users are pre-verified.
+        if (details.password) {
+            await signOut(auth);
+            throw new Error("EmailVerificationRequired");
+        }
+
+        return newUser;
 
     } catch (error: any) {
         if (error.message !== "EmailVerificationRequired") {
-            console.error("Firebase Create User Error:", error);
+            console.error("Create User Error:", error);
         }
         if (error.code === 'auth/email-already-in-use') {
             throw new Error("User already exists");
@@ -303,16 +307,14 @@ export const apiService = {
     }
   },
 
-  async updateUser(email: string, updates: Partial<Omit<User, 'id' | 'email' | 'googleId'>>): Promise<User | null> {
+  async updateUser(uid: string, updates: Partial<Omit<User, 'id' | 'email' | 'googleId'>>): Promise<User | null> {
     try {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('email', '==', email.toLowerCase()));
-        const querySnapshot = await getDocs(q);
+        const userDocRef = doc(db, 'users', uid);
+        const userDoc = await getDoc(userDocRef);
 
-        if (querySnapshot.empty) return null;
+        if (!userDoc.exists()) return null;
 
-        const userDoc = querySnapshot.docs[0];
-        let userData = userDoc.data() as User;
+        const userData = userDoc.data() as User;
 
         if (updates.badges) updates.badges = [...new Set([...userData.badges, ...updates.badges])];
         if (updates.completedModules) updates.completedModules = [...new Set([...userData.completedModules, ...updates.completedModules])];
@@ -329,7 +331,7 @@ export const apiService = {
             finalUpdates.points = updates.wallet.balance;
         }
 
-        await updateDoc(userDoc.ref, finalUpdates);
+        await updateDoc(userDocRef, finalUpdates);
         
         return { ...userData, ...finalUpdates };
     } catch (error) {
@@ -343,17 +345,24 @@ export const apiService = {
           // 1. Delete from Firestore
           await deleteDoc(doc(db, 'users', uid));
           
-          // 2. Delete from Storage (Delete all files in folder)
+          // 2. Delete from Storage (Delete all files in folder and subfolders recursively)
+          const deleteStorageFolder = async (storageRef: any) => {
+              try {
+                  const listResult = await listAll(storageRef);
+                  // Delete files
+                  await Promise.all(listResult.items.map((item) => deleteObject(item)));
+                  // Recurse into subfolders
+                  await Promise.all(listResult.prefixes.map((prefix) => deleteStorageFolder(prefix)));
+              } catch (e: any) {
+                  // Ignore if not found
+                  if (e.code !== 'storage/object-not-found') {
+                      console.warn("Error deleting storage path:", e);
+                  }
+              }
+          };
+          
           const folderRef = ref(storage, `user_uploads/${uid}`);
-          try {
-              const listResult = await listAll(folderRef);
-              // Map all items to delete promises
-              const deletePromises = listResult.items.map((itemRef) => deleteObject(itemRef));
-              await Promise.all(deletePromises);
-          } catch(e) {
-              console.warn("Error deleting user storage files or folder empty:", e);
-              // Continue to delete auth even if storage fails (e.g. folder doesn't exist)
-          }
+          await deleteStorageFolder(folderRef);
 
           // 3. Delete from Auth
           const user = auth.currentUser;
@@ -389,7 +398,12 @@ export const apiService = {
   async deleteProfilePicture(uid: string): Promise<void> {
       try {
           const storageRef = ref(storage, `user_uploads/${uid}/profile_picture`);
-          await deleteObject(storageRef);
+          // Try to delete, ignore if not found
+          await deleteObject(storageRef).catch(error => {
+              if (error.code !== 'storage/object-not-found') {
+                  throw error;
+              }
+          });
           
           // Update Firestore
           const userDocRef = doc(db, 'users', uid);
@@ -419,10 +433,6 @@ export const apiService = {
           const parentDoc = querySnapshot.docs[0];
           const parentData = parentDoc.data() as User;
 
-          // Check if child already linked elsewhere (Optional rule, keeping loose for now or strictly enforce?)
-          // Assuming strict: check all users for childEmail match on parent role
-          // Skipping complex query for now, relying on simplistic check
-
           await updateDoc(parentDoc.ref, { childEmail: childUser.email });
           return { ...parentData, childEmail: childUser.email };
       } catch (error) {
@@ -431,9 +441,6 @@ export const apiService = {
   },
 
   async sendPoints(senderEmail: string, recipientEmail: string, amount: number, message: string): Promise<{ sender: User, recipient: User }> {
-      // Transactional logic is complex in distributed systems. 
-      // For this simplified app, we will do sequential updates.
-      // In a real production app, use `runTransaction`.
       try {
           const sender = await this.getUserByEmail(senderEmail);
           const recipient = await this.getUserByEmail(recipientEmail);
@@ -479,8 +486,8 @@ export const apiService = {
           });
 
           // Write to DB
-          await this.updateUser(sender.email, { wallet: senderWallet, points: senderWallet.balance });
-          await this.updateUser(recipient.email, { wallet: recipientWallet, points: recipientWallet.balance });
+          await this.updateUser(sender.id, { wallet: senderWallet, points: senderWallet.balance });
+          await this.updateUser(recipient.id, { wallet: recipientWallet, points: recipientWallet.balance });
 
           return { 
               sender: { ...sender, wallet: senderWallet, points: senderWallet.balance }, 
@@ -529,7 +536,7 @@ export const apiService = {
           updates.wallet = newWallet;
           updates.points = newWallet.balance;
 
-          const updatedUser = await this.updateUser(user.email, updates);
+          const updatedUser = await this.updateUser(user.id, updates);
           if (!updatedUser) throw new Error("Failed to update user");
           return updatedUser;
       } catch (error) {

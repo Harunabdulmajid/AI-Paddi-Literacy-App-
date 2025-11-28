@@ -6,13 +6,13 @@ import { getStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyB7H20wazcLhBz0MCgPCnLqYIVptaMBo3U",
-  authDomain: "ai-literacy-app-a7aff.firebaseapp.com",
-  projectId: "ai-literacy-app-a7aff",
-  storageBucket: "ai-literacy-app-a7aff.firebasestorage.app",
-  messagingSenderId: "942413879792",
-  appId: "1:942413879792:web:61a4b1334d88431ce92535",
-  measurementId: "G-HS0J57FNDZ"
+  apiKey: "AIzaSyATJ9DydjsNiInO4A2iVIIqT-Diu0UftwI",
+  authDomain: "gen-lang-client-0253287074.firebaseapp.com",
+  projectId: "gen-lang-client-0253287074",
+  storageBucket: "gen-lang-client-0253287074.firebasestorage.app",
+  messagingSenderId: "879483311919",
+  appId: "1:879483311919:web:b3ad4740a3ae78db3e33da",
+  measurementId: "G-W30F9CTPC7"
 };
 
 // Initialize Firebase

@@ -1,7 +1,7 @@
 // FIX: Import `useEffect` from React to resolve the "Cannot find name 'useEffect'" error.
 import React, { useContext, useRef, useCallback, useState, useEffect } from 'react';
 import { AppContext } from './AppContext';
-import { Award, CheckCircle, Download, Share2, Edit, X, Check, Loader2, LogOut, ShieldCheck, MessageSquarePlus, Wallet, Feather, BookOpen, BrainCircuit, PenTool, Briefcase, Trash2, AlertTriangle, Upload, Image as ImageIcon } from 'lucide-react';
+import { Award, CheckCircle, Download, Share2, Edit, X, Check, Loader2, LogOut, ShieldCheck, MessageSquarePlus, Wallet, Feather, BookOpen, BrainCircuit, PenTool, Briefcase, Trash2, AlertTriangle, Upload, Image as ImageIcon, Mail, Phone, MapPin, Save, Globe } from 'lucide-react';
 import { LearningPath, User, Page, AppContextType } from '../types';
 import { useTranslations } from '../i18n';
 // FIX: Import the `BADGES` constant to resolve the "Cannot find name 'BADGES'" error.
@@ -12,6 +12,12 @@ import { BadgeIcon } from './BadgeIcon';
 import { FeedbackModal } from './FeedbackModal';
 import { UserAvatar, AVATARS } from './Header';
 import { ConfirmationModal } from './Wallet/ConfirmationModal';
+
+const COUNTRIES = [
+    "Nigeria", "Ghana", "Kenya", "South Africa", "Egypt", "Ethiopia", 
+    "Tanzania", "Uganda", "Rwanda", "Cameroon", "Zimbabwe", 
+    "Senegal", "Ivory Coast", "United States", "United Kingdom", "Canada", "India", "Other"
+].sort();
 
 const Certificate: React.FC<{ user: User, certificateRef: React.RefObject<HTMLDivElement> }> = ({ user, certificateRef }) => {
     const t = useTranslations();
@@ -231,8 +237,13 @@ export const Profile: React.FC = () => {
     const t = useTranslations();
     const certificateRef = useRef<HTMLDivElement>(null);
 
-    const [isEditingName, setIsEditingName] = useState(false);
-    const [editedName, setEditedName] = useState(user?.name || '');
+    const [isEditing, setIsEditing] = useState(false);
+    const [editForm, setEditForm] = useState({
+        name: user?.name || '',
+        phoneNumber: user?.phoneNumber || '',
+        country: user?.country || ''
+    });
+    
     const [isSaving, setIsSaving] = useState(false);
     const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
     const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
@@ -248,27 +259,34 @@ export const Profile: React.FC = () => {
 
     if (!user) return null;
 
-    const handleEditName = () => {
-        setIsEditingName(true);
+    const handleEditProfile = () => {
+        setEditForm({
+            name: user.name,
+            phoneNumber: user.phoneNumber || '',
+            country: user.country || ''
+        });
+        setIsEditing(true);
     };
 
     const handleCancelEdit = () => {
-        setIsEditingName(false);
-        setEditedName(user.name);
+        setIsEditing(false);
     };
 
-    const handleSaveName = async () => {
-        if (editedName.trim() === '' || editedName.trim() === user.name) {
-            setIsEditingName(false);
-            return;
-        }
+    const handleSaveProfile = async () => {
+        if (!editForm.name.trim()) return;
+        
         setIsSaving(true);
-        const updatedUser = await apiService.updateUser(user.email, { name: editedName.trim() });
+        const updates = {
+            name: editForm.name.trim(),
+            phoneNumber: editForm.phoneNumber.trim(),
+            country: editForm.country.trim()
+        };
+        const updatedUser = await apiService.updateUser(user.id, updates);
         if (updatedUser) {
             setUser(updatedUser as User);
         }
         setIsSaving(false);
-        setIsEditingName(false);
+        setIsEditing(false);
     };
 
     const handleSaveAvatar = async (avatarId: string) => {
@@ -278,7 +296,7 @@ export const Profile: React.FC = () => {
         }
         setIsSavingAvatar(true);
         // Clear avatarUrl if switching to a preset avatar
-        const updatedUser = await apiService.updateUser(user.email, { avatarId, avatarUrl: null as any }); 
+        const updatedUser = await apiService.updateUser(user.id, { avatarId, avatarUrl: null as any }); 
         if (updatedUser) {
             setUser(updatedUser as User);
         }
@@ -307,7 +325,7 @@ export const Profile: React.FC = () => {
     const handleConfirmPathChange = async () => {
         if (!selectedPath) return;
         setIsSavingPath(true);
-        const updatedUser = await apiService.updateUser(user.email, {
+        const updatedUser = await apiService.updateUser(user.id, {
             level: selectedPath,
             completedModules: [] // Reset progress
         });
@@ -324,11 +342,16 @@ export const Profile: React.FC = () => {
         try {
             await apiService.deleteUserAccount(user.id);
             logout();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to delete account", error);
-            alert("Failed to delete account. Please try again.");
             setIsDeleting(false);
             setIsDeleteConfirmOpen(false);
+            
+            if (error.code === 'auth/requires-recent-login') {
+                alert("For security reasons, this operation requires a recent login. Please log out and log back in, then try again.");
+            } else {
+                alert("Failed to delete account. Please try again.");
+            }
         }
     };
 
@@ -402,18 +425,63 @@ export const Profile: React.FC = () => {
                             </div>
                         </button>
                         
-                        {!isEditingName ? (
-                            <div className="flex items-center gap-2">
-                                <h3 className="text-2xl md:text-3xl font-bold text-neutral-800">{user.name}</h3>
-                                <button onClick={handleEditName} className="text-neutral-500 hover:text-primary"><Edit size={20}/></button>
-                            </div>
+                        {!isEditing ? (
+                            <>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <h3 className="text-2xl md:text-3xl font-bold text-neutral-800">{user.name}</h3>
+                                    <button onClick={handleEditProfile} className="text-neutral-500 hover:text-primary"><Edit size={20}/></button>
+                                </div>
+                                <div className="w-full text-left bg-neutral-50 p-4 rounded-lg mb-6 space-y-2">
+                                    <div className="flex items-center gap-2 text-neutral-600">
+                                        <Mail size={16} className="text-neutral-400" />
+                                        <span className="text-sm truncate">{user.email}</span>
+                                    </div>
+                                    {user.phoneNumber && (
+                                        <div className="flex items-center gap-2 text-neutral-600">
+                                            <Phone size={16} className="text-neutral-400" />
+                                            <span className="text-sm">{user.phoneNumber}</span>
+                                        </div>
+                                    )}
+                                    {user.country && (
+                                        <div className="flex items-center gap-2 text-neutral-600">
+                                            <MapPin size={16} className="text-neutral-400" />
+                                            <span className="text-sm">{user.country}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
                         ) : (
-                            <div className="flex items-center gap-2 w-full">
-                                <input type="text" value={editedName} onChange={(e) => setEditedName(e.target.value)} className="w-full text-center text-2xl font-bold border-b-2 border-primary focus:outline-none bg-transparent text-neutral-900"/>
-                                <button onClick={handleSaveName} disabled={isSaving} className="text-green-600 hover:text-green-800 disabled:text-neutral-400">
-                                    {isSaving ? <Loader2 className="animate-spin" size={24}/> : <Check size={24}/>}
-                                </button>
-                                <button onClick={handleCancelEdit} className="text-red-600 hover:text-red-800"><X size={24}/></button>
+                            <div className="w-full space-y-3 mb-6">
+                                <input 
+                                    type="text" 
+                                    value={editForm.name} 
+                                    onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                                    className="w-full p-2 border border-neutral-300 rounded focus:ring-2 focus:ring-primary focus:outline-none"
+                                    placeholder="Full Name"
+                                />
+                                <input 
+                                    type="tel" 
+                                    value={editForm.phoneNumber} 
+                                    onChange={(e) => setEditForm({...editForm, phoneNumber: e.target.value})}
+                                    className="w-full p-2 border border-neutral-300 rounded focus:ring-2 focus:ring-primary focus:outline-none"
+                                    placeholder="Phone Number"
+                                />
+                                <select 
+                                    value={editForm.country} 
+                                    onChange={(e) => setEditForm({...editForm, country: e.target.value})}
+                                    className="w-full p-2 border border-neutral-300 rounded focus:ring-2 focus:ring-primary focus:outline-none"
+                                >
+                                    <option value="">Select Country</option>
+                                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                                <div className="flex gap-2 justify-center pt-2">
+                                    <button onClick={handleSaveProfile} disabled={isSaving} className="bg-primary text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-primary-dark transition disabled:bg-neutral-300">
+                                        {isSaving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16} />} Save
+                                    </button>
+                                    <button onClick={handleCancelEdit} disabled={isSaving} className="bg-neutral-200 text-neutral-700 px-4 py-2 rounded hover:bg-neutral-300 transition">
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
                         )}
 

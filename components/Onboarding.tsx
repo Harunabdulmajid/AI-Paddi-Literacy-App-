@@ -307,7 +307,17 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
   const [error, setError] = useState<string | null>(null);
   const [assignedLevel, setAssignedLevel] = useState<LearningPath | null>(null);
   const [transitionUser, setTransitionUser] = useState<User | null>(null);
-  const [signupDetails, setSignupDetails] = useState<{ name: string; email: string; phoneNumber?: string; country?: string; password?: string; role: UserRole | null }>({ name: '', email: '', role: null });
+  
+  const [signupDetails, setSignupDetails] = useState<{ 
+      name: string; 
+      email: string; 
+      phoneNumber?: string; 
+      country?: string; 
+      password?: string; 
+      role: UserRole | null;
+      googleId?: string;
+      avatarUrl?: string;
+  }>({ name: '', email: '', role: null });
 
   useEffect(() => {
     if (step === 'success_signin') {
@@ -387,9 +397,23 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
       setIsLoading(true);
       setError(null);
       try {
-          const user = await apiService.signInWithGoogle();
-          setTransitionUser(user);
-          setStep('success_signin');
+          const { user, googleCreds } = await apiService.signInWithGoogle();
+          
+          if (user) {
+              // User exists, log them in
+              setTransitionUser(user);
+              setStep('success_signin');
+          } else {
+              // New user - proceed to onboarding with pre-filled details
+              setSignupDetails({
+                  name: googleCreds.displayName || 'User',
+                  email: googleCreds.email,
+                  role: null,
+                  googleId: googleCreds.uid,
+                  avatarUrl: googleCreds.photoURL || undefined
+              });
+              setStep('select_role');
+          }
       } catch (err: any) {
           setError("Failed to sign in with Google. Please try again.");
       } finally {
@@ -417,8 +441,8 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
       } else {
           setIsLoading(true);
           try {
-              const googleId = `gid-${Date.now()}`;
-              const createdUser = await apiService.createUser({ ...signupDetails, role, level: null, googleId });
+              const googleId = signupDetails.googleId || `gid-${Date.now()}`;
+              const createdUser = await apiService.createUser({ ...signupDetails, role, level: null, googleId, photo });
               setTransitionUser(createdUser);
               
               if (role === UserRole.Teacher) {
@@ -447,8 +471,8 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
     if (!signupDetails || !signupDetails.role) return;
     setIsLoading(true);
     try {
-      const googleId = `gid-${Date.now()}`;
-      const createdUser = await apiService.createUser({ ...signupDetails, role: signupDetails.role, level, googleId });
+      const googleId = signupDetails.googleId || `gid-${Date.now()}`;
+      const createdUser = await apiService.createUser({ ...signupDetails, role: signupDetails.role, level, googleId, photo });
       setTransitionUser(createdUser);
       setAssignedLevel(level);
       setStep('path_assigned');
@@ -555,7 +579,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
                                 We sent you a password change link to <span className="font-bold text-neutral-800">{resetEmail}</span>.
                             </p>
                             <button 
-                                onClick={() => { setIsForgotPasswordMode(false); setResetStatus('idle'); }} 
+                                onClick={() => { setIsForgotPasswordMode(false); setResetStatus('idle'); setEmail(resetEmail); }} 
                                 className="w-full bg-primary text-white font-bold py-3 rounded-lg hover:bg-primary-dark transition text-lg"
                             >
                                 Sign In
