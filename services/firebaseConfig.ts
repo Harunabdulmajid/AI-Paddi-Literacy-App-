@@ -8,7 +8,7 @@ import { getStorage } from "firebase/storage";
 const firebaseConfig = {
   // Use environment variable if available, otherwise fallback to the project key.
   // Note: If both are invalid, the app should gracefully degrade to offline mode.
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyATJ9DydjsNiInO4A2iVIIqT-Diu0UftwI",
   authDomain: "gen-lang-client-0253287074.firebaseapp.com",
   projectId: "gen-lang-client-0253287074",
   storageBucket: "gen-lang-client-0253287074.firebasestorage.app",
