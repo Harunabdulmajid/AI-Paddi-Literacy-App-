@@ -1,9 +1,8 @@
 import { User, LearningPath, FeedbackType, Language, GameSession, Player, Wallet, Transaction, UserRole, SchoolClass, StudentProgress } from '../types';
 import { CURRICULUM_MODULES } from '../constants';
 import { englishTranslations } from '../i18n'; 
-import { auth, googleProvider, db, storage } from './firebaseConfig';
+import { auth, googleProvider, storage } from './firebaseConfig';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, signOut, sendPasswordResetEmail, signInWithPopup, deleteUser } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 
 const DB_KEY_USERS = 'alk_users_by_email';
@@ -28,7 +27,6 @@ const writeDb = <T>(key: string, data: T) => {
   } catch (e: any) {
     if (e.name === 'QuotaExceededError') {
         console.error("LocalStorage quota exceeded. Cannot save data.");
-        // Optional: Clear old games or temporary data here
     } else {
         console.error("Local storage write failed", e);
     }
@@ -99,40 +97,29 @@ const isOfflineError = (error: any) => {
 
 export const apiService = {
   async getUserByEmail(email: string): Promise<User | null> {
-    try {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('email', '==', email.toLowerCase()));
-        const querySnapshot = await getDocs(q);
-        
-        if (querySnapshot.empty) {
-            return null;
-        }
-        return querySnapshot.docs[0].data() as User;
-    } catch (error: any) {
-        console.warn("Firebase error in getUserByEmail, trying mock DB:", error.code || error.message);
-        return mockGetUser(email);
-    }
+    return mockGetUser(email);
   },
 
   async authenticate(email: string, password?: string): Promise<User> {
       try {
           if (!password) throw new Error("Password required");
+          
           const userCredential = await signInWithEmailAndPassword(auth, email, password);
           const firebaseUser = userCredential.user;
-          const lowerEmail = firebaseUser.email!.toLowerCase();
 
+          // Mandatory Email Verification Check
           if (!firebaseUser.emailVerified) {
-              try { await sendEmailVerification(firebaseUser); } catch (e) {}
               await signOut(auth);
               throw new Error("EmailVerificationRequired");
           }
 
-          const userDocRef = doc(db, 'users', firebaseUser.uid);
-          const userDoc = await getDoc(userDocRef);
+          const lowerEmail = firebaseUser.email!.toLowerCase();
+          
+          // Try to get local user profile
+          let user = mockGetUser(lowerEmail);
 
-          if (userDoc.exists()) {
-              return userDoc.data() as User;
-          } else {
+          // If auth succeeds but no local profile (e.g. cleared cache), reconstruct a basic one
+          if (!user) {
               const newUser: User = {
                   id: firebaseUser.uid,
                   googleId: firebaseUser.uid,
@@ -157,10 +144,16 @@ export const apiService = {
                   unlockedThemes: ['default'],
                   isPro: false,
               };
-              await setDoc(userDocRef, newUser);
+              mockSaveUser(newUser);
               return newUser;
           }
+
+          return user;
       } catch (error: any) {
+          if (error.message === "EmailVerificationRequired") {
+              throw error;
+          }
+
           if (isOfflineError(error)) {
               console.warn("Firebase Auth network/config error. Switching to Offline/Mock mode.");
               const user = mockGetUser(email);
@@ -175,7 +168,7 @@ export const apiService = {
               }
           }
           
-          if (error.message !== "EmailVerificationRequired") console.error("Firebase Login Error:", error);
+          console.error("Firebase Login Error:", error);
           if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-email') {
               throw new Error("Password or Email Incorrect");
           }
@@ -189,12 +182,14 @@ export const apiService = {
           const firebaseUser = result.user;
           const lowerEmail = firebaseUser.email!.toLowerCase();
 
-          const userDocRef = doc(db, 'users', firebaseUser.uid);
-          const userDoc = await getDoc(userDocRef);
+          // Google accounts are typically pre-verified, but we can check if needed.
+          // For now, we assume Google Sign-In is trusted.
 
-          if (userDoc.exists()) {
+          const user = mockGetUser(lowerEmail);
+
+          if (user) {
               return { 
-                  user: userDoc.data() as User, 
+                  user, 
                   googleCreds: { uid: firebaseUser.uid, email: lowerEmail, displayName: firebaseUser.displayName || '', photoURL: firebaseUser.photoURL } 
               };
           } else {
@@ -225,22 +220,8 @@ export const apiService = {
 
   async handleUserLogin(email: string): Promise<{ user: User, newTransactions: Transaction[] }> {
     try {
-        let user: User | null = null;
-        let isOffline = false;
-
-        try {
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('email', '==', email.toLowerCase()));
-            const querySnapshot = await getDocs(q);
-
-            if (!querySnapshot.empty) {
-                user = querySnapshot.docs[0].data() as User;
-            }
-        } catch (e: any) {
-            console.warn("Failed to fetch user from Firebase in handleUserLogin, checking local storage.");
-            isOffline = true;
-            user = mockGetUser(email);
-        }
+        // Fallback to local storage primarily since we removed Firestore
+        let user: User | null = mockGetUser(email);
 
         if (!user) {
             throw new Error("User not found");
@@ -282,27 +263,7 @@ export const apiService = {
             user.wallet.dailyTransfer = { date: today, amount: 0 };
         }
         
-        if (!isOffline) {
-            try {
-                // Update Firestore by querying user ID again to get doc ref
-                const usersRef = collection(db, 'users');
-                const q = query(usersRef, where('email', '==', email.toLowerCase()));
-                const querySnapshot = await getDocs(q);
-                if (!querySnapshot.empty) {
-                    await updateDoc(querySnapshot.docs[0].ref, {
-                        points: user.points,
-                        wallet: user.wallet,
-                        lastLoginDate: user.lastLoginDate,
-                        loginStreak: user.loginStreak
-                    });
-                }
-            } catch (e) {
-                console.warn("Failed to update Firestore, updating local mirror only.");
-                mockSaveUser(user);
-            }
-        } else {
-            mockSaveUser(user);
-        }
+        mockSaveUser(user);
         
         return { user, newTransactions };
     } catch (error) {
@@ -314,16 +275,22 @@ export const apiService = {
   async createUser(details: { name: string, email: string, password?: string, level: LearningPath | null, role: UserRole, googleId: string, phoneNumber?: string, country?: string, photo?: File | null, avatarUrl?: string }): Promise<User> {
     try {
         let firebaseUser;
+        let isNewAuth = false;
         
         if (details.password) {
             const userCredential = await createUserWithEmailAndPassword(auth, details.email, details.password);
             firebaseUser = userCredential.user;
-            await sendEmailVerification(firebaseUser);
+            isNewAuth = true;
         } else {
             firebaseUser = auth.currentUser;
             if (!firebaseUser || firebaseUser.email?.toLowerCase() !== details.email.toLowerCase()) {
                 throw new Error("Authentication error. Please try signing up again.");
             }
+        }
+
+        // Send Email Verification for password-based signups
+        if (isNewAuth) {
+            await sendEmailVerification(firebaseUser);
         }
 
         const lowercasedEmail = details.email.toLowerCase();
@@ -367,9 +334,11 @@ export const apiService = {
             isPro: false,
         };
 
-        await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
+        // Save to localStorage instead of Firestore
+        mockSaveUser(newUser);
 
-        if (details.password) {
+        if (isNewAuth) {
+            // Sign out immediately so they have to login after verifying
             await signOut(auth);
             throw new Error("EmailVerificationRequired");
         }
@@ -377,6 +346,10 @@ export const apiService = {
         return newUser;
 
     } catch (error: any) {
+        if (error.message === "EmailVerificationRequired") {
+            throw error;
+        }
+
         if (isOfflineError(error)) {
              console.warn("Firebase Network Error. Creating user locally.");
              const lowercasedEmail = details.email.toLowerCase();
@@ -414,9 +387,7 @@ export const apiService = {
             return newUser;
         }
 
-        if (error.message !== "EmailVerificationRequired") {
-            console.error("Create User Error:", error);
-        }
+        console.error("Create User Error:", error);
         if (error.code === 'auth/email-already-in-use') {
             throw new Error("User already exists");
         }
@@ -425,69 +396,37 @@ export const apiService = {
   },
 
   async updateUser(uid: string, updates: Partial<Omit<User, 'id' | 'email' | 'googleId'>>): Promise<User | null> {
-    try {
-        const userDocRef = doc(db, 'users', uid);
-        const userDoc = await getDoc(userDocRef);
-
-        if (!userDoc.exists()) {
-            const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
-            const localUser = Object.values(localUsers).find(u => u.id === uid);
+    const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
+    const userEmail = Object.keys(localUsers).find(email => localUsers[email].id === uid);
+    
+    if (userEmail) {
+            const localUser = localUsers[userEmail];
             
-            if (localUser) {
-                const mergedUser = { ...localUser, ...updates };
-                if (updates.badges) mergedUser.badges = [...new Set([...localUser.badges, ...updates.badges])];
-                if (updates.completedModules) mergedUser.completedModules = [...new Set([...localUser.completedModules, ...updates.completedModules])];
-                if (updates.unlockedVoices) mergedUser.unlockedVoices = [...new Set([...localUser.unlockedVoices, ...updates.unlockedVoices])];
-                if (updates.unlockedBanners) mergedUser.unlockedBanners = [...new Set([...localUser.unlockedBanners, ...updates.unlockedBanners])];
-                if (updates.unlockedThemes) mergedUser.unlockedThemes = [...new Set([...localUser.unlockedThemes, ...updates.unlockedThemes])];
-                if(updates.wallet) mergedUser.points = updates.wallet.balance;
-
-                mockSaveUser(mergedUser);
-                return mergedUser;
-            }
-            return null;
-        }
-
-        const userData = userDoc.data() as User;
-
-        if (updates.badges) updates.badges = [...new Set([...userData.badges, ...updates.badges])];
-        if (updates.completedModules) updates.completedModules = [...new Set([...userData.completedModules, ...updates.completedModules])];
-        if (updates.unlockedVoices) updates.unlockedVoices = [...new Set([...userData.unlockedVoices, ...updates.unlockedVoices])];
-        if (updates.unlockedBanners) updates.unlockedBanners = [...new Set([...userData.unlockedBanners, ...updates.unlockedBanners])];
-        if (updates.unlockedThemes) updates.unlockedThemes = [...new Set([...userData.unlockedThemes, ...updates.unlockedThemes])];
-        
-        if(updates.wallet) {
-            userData.points = updates.wallet.balance;
-        }
-
-        const finalUpdates = { ...updates };
-        if (updates.wallet) {
-            finalUpdates.points = updates.wallet.balance;
-        }
-
-        await updateDoc(userDocRef, finalUpdates);
-        
-        return { ...userData, ...finalUpdates };
-    } catch (error) {
-        console.warn("Update User failed in cloud, trying local:", error);
-        const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
-        const userEmail = Object.keys(localUsers).find(email => localUsers[email].id === uid);
-        
-        if (userEmail) {
-             const localUser = localUsers[userEmail];
-             const mergedUser = { ...localUser, ...updates };
-             Object.assign(mergedUser, updates); 
-             if(updates.wallet) mergedUser.points = updates.wallet.balance;
-             mockSaveUser(mergedUser);
-             return mergedUser;
-        }
-        return null;
+            // Merge array updates
+            if (updates.badges) updates.badges = [...new Set([...localUser.badges, ...updates.badges])];
+            if (updates.completedModules) updates.completedModules = [...new Set([...localUser.completedModules, ...updates.completedModules])];
+            if (updates.unlockedVoices) updates.unlockedVoices = [...new Set([...localUser.unlockedVoices, ...updates.unlockedVoices])];
+            if (updates.unlockedBanners) updates.unlockedBanners = [...new Set([...localUser.unlockedBanners, ...updates.unlockedBanners])];
+            if (updates.unlockedThemes) updates.unlockedThemes = [...new Set([...localUser.unlockedThemes, ...updates.unlockedThemes])];
+            
+            const mergedUser = { ...localUser, ...updates };
+            if(updates.wallet) mergedUser.points = updates.wallet.balance;
+            
+            mockSaveUser(mergedUser);
+            return mergedUser;
     }
+    return null;
   },
 
   async deleteUserAccount(uid: string): Promise<void> {
       try {
-          await deleteDoc(doc(db, 'users', uid));
+          const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
+          const userEmail = Object.keys(localUsers).find(email => localUsers[email].id === uid);
+          if (userEmail) {
+              delete localUsers[userEmail];
+              writeDb(DB_KEY_USERS, localUsers);
+          }
+
           const deleteStorageFolder = async (storageRef: any) => {
               try {
                   const listResult = await listAll(storageRef);
@@ -499,17 +438,12 @@ export const apiService = {
           };
           const folderRef = ref(storage, `user_uploads/${uid}`);
           await deleteStorageFolder(folderRef);
+          
           const user = auth.currentUser;
           if (user && user.uid === uid) await deleteUser(user);
       } catch (error: any) {
           if (isOfflineError(error)) {
-              console.warn("Network failed during delete, removing local data only.");
-              const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
-              const userEmail = Object.keys(localUsers).find(email => localUsers[email].id === uid);
-              if (userEmail) {
-                  delete localUsers[userEmail];
-                  writeDb(DB_KEY_USERS, localUsers);
-              }
+              console.warn("Network failed during delete, removed local data.");
               return;
           }
           console.error("Error deleting account:", error);
@@ -522,8 +456,8 @@ export const apiService = {
           const storageRef = ref(storage, `user_uploads/${uid}/profile_picture`);
           await uploadBytes(storageRef, file);
           const downloadUrl = await getDownloadURL(storageRef);
-          const userDocRef = doc(db, 'users', uid);
-          await updateDoc(userDocRef, { avatarUrl: downloadUrl, avatarId: '' });
+          
+          await this.updateUser(uid, { avatarUrl: downloadUrl, avatarId: '' });
           return downloadUrl;
       } catch (error: any) {
           if (isOfflineError(error)) throw new Error("Offline: Cannot upload images.");
@@ -536,13 +470,9 @@ export const apiService = {
       try {
           const storageRef = ref(storage, `user_uploads/${uid}/profile_picture`);
           await deleteObject(storageRef).catch(error => { if (error.code !== 'storage/object-not-found') throw error; });
-          const userDocRef = doc(db, 'users', uid);
-          await updateDoc(userDocRef, { avatarUrl: null, avatarId: 'avatar-01' });
+          
+          await this.updateUser(uid, { avatarUrl: null as any, avatarId: 'avatar-01' });
       } catch (error: any) {
-          if (isOfflineError(error)) {
-               await this.updateUser(uid, { avatarUrl: null as any, avatarId: 'avatar-01' });
-               return;
-          }
           console.error("Error deleting profile picture:", error);
           throw error;
       }
@@ -555,8 +485,9 @@ export const apiService = {
           if (childUser.role !== UserRole.Student) throw new Error("The provided email does not belong to a student account.");
           const parentUser = await this.getUserByEmail(parentEmail);
           if (!parentUser) throw new Error("Parent account not found.");
-          await this.updateUser(parentUser.id, { childEmail: childUser.email });
-          return { ...parentUser, childEmail: childUser.email };
+          
+          const updated = await this.updateUser(parentUser.id, { childEmail: childUser.email });
+          return updated!;
       } catch (error) { throw error; }
   },
 
@@ -597,12 +528,12 @@ export const apiService = {
               from: sender.name,
           });
 
-          await this.updateUser(sender.id, { wallet: senderWallet, points: senderWallet.balance });
-          await this.updateUser(recipient.id, { wallet: recipientWallet, points: recipientWallet.balance });
+          const updatedSender = await this.updateUser(sender.id, { wallet: senderWallet, points: senderWallet.balance });
+          const updatedRecipient = await this.updateUser(recipient.id, { wallet: recipientWallet, points: recipientWallet.balance });
 
           return { 
-              sender: { ...sender, wallet: senderWallet, points: senderWallet.balance }, 
-              recipient: { ...recipient, wallet: recipientWallet, points: recipientWallet.balance }
+              sender: updatedSender!, 
+              recipient: updatedRecipient!
           };
       } catch (error) { throw error; }
   },
@@ -643,14 +574,9 @@ export const apiService = {
   
   async getLeaderboard(): Promise<Array<Pick<User, 'name' | 'points'>>> {
      try {
-         const usersRef = collection(db, 'users');
-         const querySnapshot = await getDocs(usersRef);
-         return querySnapshot.docs.map(doc => ({ name: doc.data().name, points: doc.data().points })).sort((a, b) => b.points - a.points);
+         const users = readDb<Record<string, User>>(DB_KEY_USERS, {});
+         return Object.values(users).map(({ name, points }) => ({ name, points })).sort((a, b) => b.points - a.points);
      } catch (error: any) {
-         if (isOfflineError(error) || error.message?.includes('network')) {
-             const users = readDb<Record<string, User>>(DB_KEY_USERS, {});
-             return Object.values(users).map(({ name, points }) => ({ name, points })).sort((a, b) => b.points - a.points);
-         }
          console.error("Leaderboard Error:", error);
          return [];
      }
