@@ -1,9 +1,10 @@
 import { User, LearningPath, FeedbackType, Language, GameSession, Player, Wallet, Transaction, UserRole, SchoolClass, StudentProgress } from '../types';
 import { CURRICULUM_MODULES } from '../constants';
 import { englishTranslations } from '../i18n'; 
-import { auth, googleProvider, storage } from './firebaseConfig';
+import { auth, googleProvider, storage, db } from './firebaseConfig';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, signOut, sendPasswordResetEmail, signInWithPopup, deleteUser } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 
 const DB_KEY_USERS = 'alk_users_by_email';
 const DB_KEY_GAMES = 'alk_games_by_code';
@@ -92,12 +93,27 @@ const isOfflineError = (error: any) => {
            error.message?.includes('network-request-failed') ||
            error.code === 'auth/invalid-api-key' ||
            error.message?.includes('API key not valid') ||
-           error.message?.includes('INVALID_ARGUMENT');
+           error.message?.includes('INVALID_ARGUMENT') ||
+           error.code === 'unavailable';
 };
 
 export const apiService = {
   async getUserByEmail(email: string): Promise<User | null> {
-    return mockGetUser(email);
+    try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', email.toLowerCase()));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+            return mockGetUser(email); // Fallback to local if not found in cloud
+        }
+        const user = querySnapshot.docs[0].data() as User;
+        mockSaveUser(user); // Sync to local
+        return user;
+    } catch (error: any) {
+        console.warn("Firebase error in getUserByEmail, trying mock DB:", error.code || error.message);
+        return mockGetUser(email);
+    }
   },
 
   async authenticate(email: string, password?: string): Promise<User> {
@@ -115,8 +131,23 @@ export const apiService = {
 
           const lowerEmail = firebaseUser.email!.toLowerCase();
           
-          // Try to get local user profile
-          let user = mockGetUser(lowerEmail);
+          let user: User | null = null;
+          
+          // Try Firestore first
+          try {
+              const userDocRef = doc(db, 'users', firebaseUser.uid);
+              const userDoc = await getDoc(userDocRef);
+              if (userDoc.exists()) {
+                  user = userDoc.data() as User;
+                  mockSaveUser(user); // Sync local
+              }
+          } catch (e) {
+              console.warn("Firestore fetch failed during auth, checking local");
+          }
+
+          if (!user) {
+              user = mockGetUser(lowerEmail);
+          }
 
           // If auth succeeds but no local profile (e.g. cleared cache), reconstruct a basic one
           if (!user) {
@@ -144,6 +175,14 @@ export const apiService = {
                   unlockedThemes: ['default'],
                   isPro: false,
               };
+              
+              // Try to save to Firestore if online
+              try {
+                  await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
+              } catch (e) {
+                  console.warn("Failed to create user in Firestore");
+              }
+              
               mockSaveUser(newUser);
               return newUser;
           }
@@ -182,8 +221,21 @@ export const apiService = {
           const firebaseUser = result.user;
           const lowerEmail = firebaseUser.email!.toLowerCase();
 
-          // Google accounts are typically pre-verified, but we can check if needed.
-          // For now, we assume Google Sign-In is trusted.
+          // Try Firestore
+          try {
+              const userDocRef = doc(db, 'users', firebaseUser.uid);
+              const userDoc = await getDoc(userDocRef);
+              if (userDoc.exists()) {
+                  const user = userDoc.data() as User;
+                  mockSaveUser(user);
+                  return { 
+                      user, 
+                      googleCreds: { uid: firebaseUser.uid, email: lowerEmail, displayName: firebaseUser.displayName || '', photoURL: firebaseUser.photoURL } 
+                  };
+              }
+          } catch(e) {
+              console.warn("Firestore check failed for Google Sign In");
+          }
 
           const user = mockGetUser(lowerEmail);
 
@@ -220,8 +272,7 @@ export const apiService = {
 
   async handleUserLogin(email: string): Promise<{ user: User, newTransactions: Transaction[] }> {
     try {
-        // Fallback to local storage primarily since we removed Firestore
-        let user: User | null = mockGetUser(email);
+        let user: User | null = await this.getUserByEmail(email);
 
         if (!user) {
             throw new Error("User not found");
@@ -261,6 +312,18 @@ export const apiService = {
         
         if (user.wallet.dailyTransfer.date !== today) {
             user.wallet.dailyTransfer = { date: today, amount: 0 };
+        }
+        
+        // Sync back to Firestore
+        try {
+            await updateDoc(doc(db, 'users', user.id), {
+                points: user.points,
+                wallet: user.wallet,
+                lastLoginDate: user.lastLoginDate,
+                loginStreak: user.loginStreak
+            });
+        } catch (e) {
+            console.warn("Failed to sync login stats to Firestore");
         }
         
         mockSaveUser(user);
@@ -334,7 +397,10 @@ export const apiService = {
             isPro: false,
         };
 
-        // Save to localStorage instead of Firestore
+        // Save to Firestore
+        await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
+        
+        // Save locally
         mockSaveUser(newUser);
 
         if (isNewAuth) {
@@ -396,13 +462,41 @@ export const apiService = {
   },
 
   async updateUser(uid: string, updates: Partial<Omit<User, 'id' | 'email' | 'googleId'>>): Promise<User | null> {
+    try {
+        const userRef = doc(db, 'users', uid);
+        const userDoc = await getDoc(userRef);
+        
+        if (userDoc.exists()) {
+            const userData = userDoc.data() as User;
+            
+            // Merge arrays to prevent overwriting
+            if (updates.badges) updates.badges = [...new Set([...userData.badges, ...updates.badges])];
+            if (updates.completedModules) updates.completedModules = [...new Set([...userData.completedModules, ...updates.completedModules])];
+            if (updates.unlockedVoices) updates.unlockedVoices = [...new Set([...userData.unlockedVoices, ...updates.unlockedVoices])];
+            if (updates.unlockedBanners) updates.unlockedBanners = [...new Set([...userData.unlockedBanners, ...updates.unlockedBanners])];
+            if (updates.unlockedThemes) updates.unlockedThemes = [...new Set([...userData.unlockedThemes, ...updates.unlockedThemes])];
+            
+            if(updates.wallet) {
+                // Ensure balance sync
+                updates.points = updates.wallet.balance;
+            }
+
+            await updateDoc(userRef, updates);
+            const updatedData = { ...userData, ...updates };
+            mockSaveUser(updatedData);
+            return updatedData;
+        }
+    } catch (e) {
+        console.warn("Update User failed in cloud, trying local:", e);
+    }
+
+    // Fallback to local update
     const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
     const userEmail = Object.keys(localUsers).find(email => localUsers[email].id === uid);
     
     if (userEmail) {
             const localUser = localUsers[userEmail];
             
-            // Merge array updates
             if (updates.badges) updates.badges = [...new Set([...localUser.badges, ...updates.badges])];
             if (updates.completedModules) updates.completedModules = [...new Set([...localUser.completedModules, ...updates.completedModules])];
             if (updates.unlockedVoices) updates.unlockedVoices = [...new Set([...localUser.unlockedVoices, ...updates.unlockedVoices])];
@@ -420,13 +514,10 @@ export const apiService = {
 
   async deleteUserAccount(uid: string): Promise<void> {
       try {
-          const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
-          const userEmail = Object.keys(localUsers).find(email => localUsers[email].id === uid);
-          if (userEmail) {
-              delete localUsers[userEmail];
-              writeDb(DB_KEY_USERS, localUsers);
-          }
+          // Delete from Firestore
+          await deleteDoc(doc(db, 'users', uid));
 
+          // Delete from Storage
           const deleteStorageFolder = async (storageRef: any) => {
               try {
                   const listResult = await listAll(storageRef);
@@ -439,11 +530,27 @@ export const apiService = {
           const folderRef = ref(storage, `user_uploads/${uid}`);
           await deleteStorageFolder(folderRef);
           
+          // Delete Auth User
           const user = auth.currentUser;
           if (user && user.uid === uid) await deleteUser(user);
+          
+          // Clean Local
+          const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
+          const userEmail = Object.keys(localUsers).find(email => localUsers[email].id === uid);
+          if (userEmail) {
+              delete localUsers[userEmail];
+              writeDb(DB_KEY_USERS, localUsers);
+          }
+
       } catch (error: any) {
           if (isOfflineError(error)) {
               console.warn("Network failed during delete, removed local data.");
+              const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
+              const userEmail = Object.keys(localUsers).find(email => localUsers[email].id === uid);
+              if (userEmail) {
+                  delete localUsers[userEmail];
+                  writeDb(DB_KEY_USERS, localUsers);
+              }
               return;
           }
           console.error("Error deleting account:", error);
@@ -574,9 +681,14 @@ export const apiService = {
   
   async getLeaderboard(): Promise<Array<Pick<User, 'name' | 'points'>>> {
      try {
-         const users = readDb<Record<string, User>>(DB_KEY_USERS, {});
-         return Object.values(users).map(({ name, points }) => ({ name, points })).sort((a, b) => b.points - a.points);
+         const usersRef = collection(db, 'users');
+         const querySnapshot = await getDocs(usersRef);
+         return querySnapshot.docs.map(doc => ({ name: doc.data().name, points: doc.data().points })).sort((a, b) => b.points - a.points);
      } catch (error: any) {
+         if (isOfflineError(error) || error.message?.includes('network')) {
+             const users = readDb<Record<string, User>>(DB_KEY_USERS, {});
+             return Object.values(users).map(({ name, points }) => ({ name, points })).sort((a, b) => b.points - a.points);
+         }
          console.error("Leaderboard Error:", error);
          return [];
      }
