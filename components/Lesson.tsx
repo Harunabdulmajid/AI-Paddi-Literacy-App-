@@ -9,6 +9,7 @@ import { BADGES, LEARNING_PATHS } from '../constants';
 import { BadgeIcon } from './BadgeIcon';
 import { geminiService } from '../services/geminiService';
 import { dbService } from '../services/db';
+import { audioService } from '../services/audioService';
 
 type LessonState = 'reading' | 'quizzing' | 'complete';
 
@@ -82,7 +83,6 @@ export const Lesson: React.FC = () => {
     // TTS State
     const [speakingSectionKey, setSpeakingSectionKey] = useState<string | null>(null);
     const [isTTSLoading, setIsTTSLoading] = useState(false);
-    const audioContextRef = useRef<AudioContext | null>(null);
     const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
     const initialBadges = user?.badges || [];
@@ -90,14 +90,10 @@ export const Lesson: React.FC = () => {
     const englishModuleContent = activeModuleId ? englishTranslations.curriculum[activeModuleId]?.lessonContent : null;
 
     useEffect(() => {
-        // @ts-ignore
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (AudioContext) {
-            audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-        }
         return () => {
-            activeSourceRef.current?.stop();
-            audioContextRef.current?.close().catch(console.error);
+            if (activeSourceRef.current) {
+                activeSourceRef.current.stop();
+            }
         };
     }, []);
 
@@ -161,11 +157,9 @@ export const Lesson: React.FC = () => {
     const nextModuleId = useMemo(() => {
         if (!user || !activeModuleId) return null;
         
-        // Default to Explorer if level is null/undefined to ensure continuity
         const currentLevel = user.level || LearningPath.Explorer;
         const pathData = LEARNING_PATHS[currentLevel];
         
-        // Safety check if path data is missing
         if (!pathData) return null;
 
         const pathModules = pathData.levels.flat();
@@ -178,20 +172,23 @@ export const Lesson: React.FC = () => {
     }, [user, activeModuleId]);
 
     const playRawAudio = async (pcmData: Uint8Array) => {
-        const ctx = audioContextRef.current;
-        if (!ctx) return;
-    
+        const ctx = audioService.getContext();
+        
         if (activeSourceRef.current) {
-            activeSourceRef.current.stop();
+            try {
+                activeSourceRef.current.stop();
+            } catch (e) {
+                // Ignore errors if already stopped
+            }
         }
     
         const dataInt16 = new Int16Array(pcmData.buffer);
         const frameCount = dataInt16.length;
-        const buffer = ctx.createBuffer(1, frameCount, 24000); // 1 channel, 24000 sample rate
+        const buffer = ctx.createBuffer(1, frameCount, 24000); 
         const channelData = buffer.getChannelData(0);
     
         for (let i = 0; i < frameCount; i++) {
-            channelData[i] = dataInt16[i] / 32768.0; // convert from Int16 to Float32 range [-1, 1]
+            channelData[i] = dataInt16[i] / 32768.0;
         }
     
         const source = ctx.createBufferSource();
@@ -209,7 +206,7 @@ export const Lesson: React.FC = () => {
     };
 
     const handleReadAloud = async (sectionKey: string, text: string) => {
-        if (speakingSectionKey === sectionKey) { // Clicked on the currently playing/loading section
+        if (speakingSectionKey === sectionKey) { 
             if (activeSourceRef.current) {
                 activeSourceRef.current.stop();
             }
@@ -228,7 +225,7 @@ export const Lesson: React.FC = () => {
         try {
             const base64Audio = await geminiService.generateSpeech(text);
             const pcmData = decode(base64Audio);
-            if (speakingSectionKey === sectionKey) { // Check if user hasn't clicked another button while loading
+            if (speakingSectionKey === sectionKey) { 
                 await playRawAudio(pcmData);
             }
         } catch (error) {
@@ -328,7 +325,7 @@ export const Lesson: React.FC = () => {
             {lessonState === 'complete' && 
                 <CompletionModal 
                     onAcknowledge={handleAcknowledgeCompletion} 
-                    points={50} // Updated to 50 points as we skip the 25pt challenge
+                    points={50} 
                     unlockedBadgeIds={unlockedBadgesOnComplete} 
                     onNextLesson={nextModuleId ? handleNextLesson : undefined}
                 />
@@ -370,11 +367,6 @@ export const Lesson: React.FC = () => {
                         </button>
                     </div>
                 )}
-               
-               {/* Scenario Challenge Temporarily Disabled */}
-               {/* {lessonState === 'quizzing' && displayContent.scenario && (
-                    <ScenarioChallenge scenario={displayContent.scenario} onComplete={handleCompleteLesson} />
-               )} */}
             </div>
         </div>
     );

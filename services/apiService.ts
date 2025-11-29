@@ -6,7 +6,6 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVe
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 
-// Use localStorage to simulate a persistent database for Games, Classes, and Users (Fallback)
 const DB_KEY_USERS = 'alk_users_by_email';
 const DB_KEY_GAMES = 'alk_games_by_code';
 const DB_KEY_CLASSES = 'alk_classes_by_id';
@@ -14,7 +13,6 @@ const DB_KEY_CLASSES = 'alk_classes_by_id';
 const SIMULATED_DELAY = 300; // ms
 const DAILY_TRANSFER_LIMIT = 200;
 
-// --- Helper Functions ---
 const readDb = <T>(key: string, defaultValue: T): T => {
   try {
     const data = localStorage.getItem(key);
@@ -27,8 +25,13 @@ const readDb = <T>(key: string, defaultValue: T): T => {
 const writeDb = <T>(key: string, data: T) => {
   try {
     localStorage.setItem(key, JSON.stringify(data));
-  } catch (e) {
-    console.error("Local storage write failed", e);
+  } catch (e: any) {
+    if (e.name === 'QuotaExceededError') {
+        console.error("LocalStorage quota exceeded. Cannot save data.");
+        // Optional: Clear old games or temporary data here
+    } else {
+        console.error("Local storage write failed", e);
+    }
   }
 };
 
@@ -40,11 +43,9 @@ const initializeDefaultWallet = (points: number): Wallet => ({
     dailyTransfer: { date: getTodayDateString(), amount: 0 },
 });
 
-// --- Mock Data Initialization (Fallback) ---
 const initializeMockData = () => {
     const users = readDb<Record<string, User>>(DB_KEY_USERS, {});
     if (Object.keys(users).length === 0) {
-        // Create Mock User for fallback testing
         const amina: User = {
             id: 'user-amina-mock',
             googleId: 'mock-google-id',
@@ -74,7 +75,6 @@ const initializeMockData = () => {
     }
 };
 
-// Initialize mock data on load
 initializeMockData();
 
 const mockGetUser = (email: string): User | null => {
@@ -88,7 +88,15 @@ const mockSaveUser = (user: User) => {
     writeDb(DB_KEY_USERS, users);
 };
 
-// --- API Service ---
+// Helper to check for offline or invalid config errors
+const isOfflineError = (error: any) => {
+    return error.code === 'auth/network-request-failed' || 
+           error.message?.includes('network-request-failed') ||
+           error.code === 'auth/invalid-api-key' ||
+           error.message?.includes('API key not valid') ||
+           error.message?.includes('INVALID_ARGUMENT');
+};
+
 export const apiService = {
   async getUserByEmail(email: string): Promise<User | null> {
     try {
@@ -99,12 +107,9 @@ export const apiService = {
         if (querySnapshot.empty) {
             return null;
         }
-        
-        // Return the first matching user
         return querySnapshot.docs[0].data() as User;
     } catch (error: any) {
         console.warn("Firebase error in getUserByEmail, trying mock DB:", error.code || error.message);
-        // Fallback to local storage
         return mockGetUser(email);
     }
   },
@@ -112,31 +117,22 @@ export const apiService = {
   async authenticate(email: string, password?: string): Promise<User> {
       try {
           if (!password) throw new Error("Password required");
-          
-          // Firebase Authentication
           const userCredential = await signInWithEmailAndPassword(auth, email, password);
           const firebaseUser = userCredential.user;
           const lowerEmail = firebaseUser.email!.toLowerCase();
 
-          // Check if email is verified
           if (!firebaseUser.emailVerified) {
-              try {
-                  await sendEmailVerification(firebaseUser);
-              } catch (e) {
-                  // Ignore
-              }
+              try { await sendEmailVerification(firebaseUser); } catch (e) {}
               await signOut(auth);
               throw new Error("EmailVerificationRequired");
           }
 
-          // Fetch User from Firestore
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           const userDoc = await getDoc(userDocRef);
 
           if (userDoc.exists()) {
               return userDoc.data() as User;
           } else {
-              // User authenticated but not in DB
               const newUser: User = {
                   id: firebaseUser.uid,
                   googleId: firebaseUser.uid,
@@ -165,16 +161,13 @@ export const apiService = {
               return newUser;
           }
       } catch (error: any) {
-          if (error.code === 'auth/network-request-failed' || error.message?.includes('network-request-failed')) {
-              console.warn("Firebase Auth network error. Switching to Offline/Mock mode.");
-              
+          if (isOfflineError(error)) {
+              console.warn("Firebase Auth network/config error. Switching to Offline/Mock mode.");
               const user = mockGetUser(email);
               if (user) {
                   return user;
               } else {
-                  // If strictly testing, allow a fallback login if password matches simple logic or specific test user
                   if (email === 'amina@example.com' && password === 'password123') {
-                      // Ensure amina exists
                       initializeMockData();
                       return mockGetUser(email)!;
                   }
@@ -182,9 +175,7 @@ export const apiService = {
               }
           }
           
-          if (error.message !== "EmailVerificationRequired") {
-              console.error("Firebase Login Error:", error);
-          }
+          if (error.message !== "EmailVerificationRequired") console.error("Firebase Login Error:", error);
           if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-email') {
               throw new Error("Password or Email Incorrect");
           }
@@ -214,7 +205,7 @@ export const apiService = {
           }
       } catch (error: any) {
           console.error("Google Sign In Error:", error);
-          if (error.code === 'auth/network-request-failed') {
+          if (isOfflineError(error)) {
               throw new Error("Network error. Please check your connection or try email sign-in.");
           }
           throw error;
@@ -227,8 +218,7 @@ export const apiService = {
           return { success: true };
       } catch (error: any) {
           console.error("Reset Password Error:", error);
-          // Fake success in offline mode
-          if (error.code === 'auth/network-request-failed') return { success: true };
+          if (isOfflineError(error)) return { success: true };
           throw error;
       }
   },
@@ -258,7 +248,6 @@ export const apiService = {
 
         let newTransactions: Transaction[] = [];
 
-        // --- Backward compatibility & Initialization ---
         if (!user.wallet) user.wallet = initializeDefaultWallet(user.points);
         if (!user.lastLoginDate) user.lastLoginDate = '';
         if (!user.loginStreak) user.loginStreak = 0;
@@ -266,7 +255,6 @@ export const apiService = {
         const today = getTodayDateString();
         const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
         
-        // --- Daily Login Streak Logic ---
         if (user.lastLoginDate !== today) {
           let newStreak = 1;
           if (user.lastLoginDate === yesterday) {
@@ -294,10 +282,9 @@ export const apiService = {
             user.wallet.dailyTransfer = { date: today, amount: 0 };
         }
         
-        // Update Firestore or LocalStorage
         if (!isOffline) {
             try {
-                // We need the doc ref again since we can't store it in the user object easily
+                // Update Firestore by querying user ID again to get doc ref
                 const usersRef = collection(db, 'users');
                 const q = query(usersRef, where('email', '==', email.toLowerCase()));
                 const querySnapshot = await getDocs(q);
@@ -390,8 +377,7 @@ export const apiService = {
         return newUser;
 
     } catch (error: any) {
-        // Fallback for network error during creation
-        if (error.code === 'auth/network-request-failed' || error.message?.includes('network-request-failed')) {
+        if (isOfflineError(error)) {
              console.warn("Firebase Network Error. Creating user locally.");
              const lowercasedEmail = details.email.toLowerCase();
              const existing = mockGetUser(lowercasedEmail);
@@ -444,14 +430,11 @@ export const apiService = {
         const userDoc = await getDoc(userDocRef);
 
         if (!userDoc.exists()) {
-            // Check local fallback if not found in Firestore (maybe it's a local-only user)
             const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
             const localUser = Object.values(localUsers).find(u => u.id === uid);
             
             if (localUser) {
-                // Update local user
                 const mergedUser = { ...localUser, ...updates };
-                // Handle array merges logic for local
                 if (updates.badges) mergedUser.badges = [...new Set([...localUser.badges, ...updates.badges])];
                 if (updates.completedModules) mergedUser.completedModules = [...new Set([...localUser.completedModules, ...updates.completedModules])];
                 if (updates.unlockedVoices) mergedUser.unlockedVoices = [...new Set([...localUser.unlockedVoices, ...updates.unlockedVoices])];
@@ -487,15 +470,12 @@ export const apiService = {
         return { ...userData, ...finalUpdates };
     } catch (error) {
         console.warn("Update User failed in cloud, trying local:", error);
-        // Best effort fallback: try to find user by ID in local cache if we have one
-        // Note: uid lookup in local storage map (email-keyed) is inefficient but functional for small mock data
         const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
         const userEmail = Object.keys(localUsers).find(email => localUsers[email].id === uid);
         
         if (userEmail) {
              const localUser = localUsers[userEmail];
              const mergedUser = { ...localUser, ...updates };
-             // (Repeat merge logic for local if needed, or just simplistic merge for fallback)
              Object.assign(mergedUser, updates); 
              if(updates.wallet) mergedUser.points = updates.wallet.balance;
              mockSaveUser(mergedUser);
@@ -508,28 +488,21 @@ export const apiService = {
   async deleteUserAccount(uid: string): Promise<void> {
       try {
           await deleteDoc(doc(db, 'users', uid));
-          
           const deleteStorageFolder = async (storageRef: any) => {
               try {
                   const listResult = await listAll(storageRef);
                   await Promise.all(listResult.items.map((item) => deleteObject(item)));
                   await Promise.all(listResult.prefixes.map((prefix) => deleteStorageFolder(prefix)));
               } catch (e: any) {
-                  if (e.code !== 'storage/object-not-found') {
-                      console.warn("Error deleting storage path:", e);
-                  }
+                  if (e.code !== 'storage/object-not-found') console.warn("Error deleting storage path:", e);
               }
           };
-          
           const folderRef = ref(storage, `user_uploads/${uid}`);
           await deleteStorageFolder(folderRef);
-
           const user = auth.currentUser;
-          if (user && user.uid === uid) {
-              await deleteUser(user);
-          }
+          if (user && user.uid === uid) await deleteUser(user);
       } catch (error: any) {
-          if (error.code === 'auth/network-request-failed') {
+          if (isOfflineError(error)) {
               console.warn("Network failed during delete, removing local data only.");
               const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
               const userEmail = Object.keys(localUsers).find(email => localUsers[email].id === uid);
@@ -549,18 +522,11 @@ export const apiService = {
           const storageRef = ref(storage, `user_uploads/${uid}/profile_picture`);
           await uploadBytes(storageRef, file);
           const downloadUrl = await getDownloadURL(storageRef);
-          
           const userDocRef = doc(db, 'users', uid);
-          await updateDoc(userDocRef, {
-              avatarUrl: downloadUrl,
-              avatarId: ''
-          });
-          
+          await updateDoc(userDocRef, { avatarUrl: downloadUrl, avatarId: '' });
           return downloadUrl;
       } catch (error: any) {
-          if (error.code === 'auth/network-request-failed') {
-              throw new Error("Offline: Cannot upload images.");
-          }
+          if (isOfflineError(error)) throw new Error("Offline: Cannot upload images.");
           console.error("Error uploading profile picture:", error);
           throw error;
       }
@@ -569,20 +535,11 @@ export const apiService = {
   async deleteProfilePicture(uid: string): Promise<void> {
       try {
           const storageRef = ref(storage, `user_uploads/${uid}/profile_picture`);
-          await deleteObject(storageRef).catch(error => {
-              if (error.code !== 'storage/object-not-found') {
-                  throw error;
-              }
-          });
-          
+          await deleteObject(storageRef).catch(error => { if (error.code !== 'storage/object-not-found') throw error; });
           const userDocRef = doc(db, 'users', uid);
-          await updateDoc(userDocRef, {
-              avatarUrl: null,
-              avatarId: 'avatar-01'
-          });
+          await updateDoc(userDocRef, { avatarUrl: null, avatarId: 'avatar-01' });
       } catch (error: any) {
-          if (error.code === 'auth/network-request-failed') {
-               // Fallback local update
+          if (isOfflineError(error)) {
                await this.updateUser(uid, { avatarUrl: null as any, avatarId: 'avatar-01' });
                return;
           }
@@ -593,28 +550,20 @@ export const apiService = {
 
   async linkChildAccount(parentEmail: string, childEmail: string): Promise<User> {
       try {
-          // Verify child exists
           const childUser = await this.getUserByEmail(childEmail);
           if (!childUser) throw new Error("No student account found with that email.");
           if (childUser.role !== UserRole.Student) throw new Error("The provided email does not belong to a student account.");
-
-          // Verify parent
-          // Note: In robust app, this would be a server function to ensure parent owns the email
           const parentUser = await this.getUserByEmail(parentEmail);
           if (!parentUser) throw new Error("Parent account not found.");
-
           await this.updateUser(parentUser.id, { childEmail: childUser.email });
           return { ...parentUser, childEmail: childUser.email };
-      } catch (error) {
-          throw error;
-      }
+      } catch (error) { throw error; }
   },
 
   async sendPoints(senderEmail: string, recipientEmail: string, amount: number, message: string): Promise<{ sender: User, recipient: User }> {
       try {
           const sender = await this.getUserByEmail(senderEmail);
           const recipient = await this.getUserByEmail(recipientEmail);
-
           if (!sender) throw new Error("Sender not found.");
           if (!recipient) throw new Error("Recipient not found.");
           if (sender.email === recipient.email) throw new Error("You cannot send points to yourself.");
@@ -622,15 +571,9 @@ export const apiService = {
           if (sender.wallet.balance < amount) throw new Error("Insufficient points.");
 
           const today = getTodayDateString();
-          
-          // Update Sender Wallet
           const senderWallet = { ...sender.wallet };
-          if (senderWallet.dailyTransfer.date !== today) {
-              senderWallet.dailyTransfer = { date: today, amount: 0 };
-          }
-          if (senderWallet.dailyTransfer.amount + amount > DAILY_TRANSFER_LIMIT) {
-              throw new Error(`Daily transfer limit of ${DAILY_TRANSFER_LIMIT} points exceeded.`);
-          }
+          if (senderWallet.dailyTransfer.date !== today) senderWallet.dailyTransfer = { date: today, amount: 0 };
+          if (senderWallet.dailyTransfer.amount + amount > DAILY_TRANSFER_LIMIT) throw new Error(`Daily transfer limit of ${DAILY_TRANSFER_LIMIT} points exceeded.`);
 
           senderWallet.balance -= amount;
           senderWallet.dailyTransfer.amount += amount;
@@ -643,7 +586,6 @@ export const apiService = {
               to: recipient.name,
           });
 
-          // Update Recipient Wallet
           const recipientWallet = { ...recipient.wallet };
           recipientWallet.balance += amount;
           recipientWallet.transactions.unshift({
@@ -655,7 +597,6 @@ export const apiService = {
               from: sender.name,
           });
 
-          // Write to DB
           await this.updateUser(sender.id, { wallet: senderWallet, points: senderWallet.balance });
           await this.updateUser(recipient.id, { wallet: recipientWallet, points: recipientWallet.balance });
 
@@ -663,10 +604,7 @@ export const apiService = {
               sender: { ...sender, wallet: senderWallet, points: senderWallet.balance }, 
               recipient: { ...recipient, wallet: recipientWallet, points: recipientWallet.balance }
           };
-
-      } catch (error) {
-          throw error;
-      }
+      } catch (error) { throw error; }
   },
 
   async redeemItem(userEmail: string, itemId: string, cost: number, payload: any): Promise<User> {
@@ -676,23 +614,14 @@ export const apiService = {
           if (user.wallet.balance < cost) throw new Error("Insufficient points.");
 
           const updates: Partial<User> = {};
-          
-          // Apply payload effects
           if (payload.badgeId) updates.badges = [...user.badges, payload.badgeId];
           if (payload.certificateLevel) updates.certificateLevel = payload.certificateLevel;
-          if (payload.unlockTheme) {
-              updates.unlockedThemes = user.unlockedThemes ? [...user.unlockedThemes, payload.unlockTheme] : ['default', payload.unlockTheme];
-          }
+          if (payload.unlockTheme) updates.unlockedThemes = user.unlockedThemes ? [...user.unlockedThemes, payload.unlockTheme] : ['default', payload.unlockTheme];
           if (payload.addTutorTokens) updates.tutorTokens = (user.tutorTokens || 0) + payload.addTutorTokens;
           if (payload.addQuizRewinds) updates.quizRewinds = (user.quizRewinds || 0) + payload.addQuizRewinds;
-          if (payload.unlockBanner) {
-              updates.unlockedBanners = user.unlockedBanners ? [...user.unlockedBanners, payload.unlockBanner] : [payload.unlockBanner];
-          }
-          if (payload.unlockVoice) {
-              updates.unlockedVoices = user.unlockedVoices ? [...user.unlockedVoices, payload.unlockVoice] : [payload.unlockVoice];
-          }
+          if (payload.unlockBanner) updates.unlockedBanners = user.unlockedBanners ? [...user.unlockedBanners, payload.unlockBanner] : [payload.unlockBanner];
+          if (payload.unlockVoice) updates.unlockedVoices = user.unlockedVoices ? [...user.unlockedVoices, payload.unlockVoice] : [payload.unlockVoice];
 
-          // Update Wallet
           const newWallet = { ...user.wallet };
           newWallet.balance -= cost;
           newWallet.transactions.unshift({
@@ -709,28 +638,18 @@ export const apiService = {
           const updatedUser = await this.updateUser(user.id, updates);
           if (!updatedUser) throw new Error("Failed to update user");
           return updatedUser;
-      } catch (error) {
-          throw error;
-      }
+      } catch (error) { throw error; }
   },
   
   async getLeaderboard(): Promise<Array<Pick<User, 'name' | 'points'>>> {
      try {
          const usersRef = collection(db, 'users');
          const querySnapshot = await getDocs(usersRef);
-         
-         const leaderboard = querySnapshot.docs
-            .map(doc => ({ name: doc.data().name, points: doc.data().points }))
-            .sort((a, b) => b.points - a.points);
-            
-         return leaderboard;
+         return querySnapshot.docs.map(doc => ({ name: doc.data().name, points: doc.data().points })).sort((a, b) => b.points - a.points);
      } catch (error: any) {
-         if (error.code === 'auth/network-request-failed' || error.message?.includes('network')) {
-             // Fallback to local leaderboard
+         if (isOfflineError(error) || error.message?.includes('network')) {
              const users = readDb<Record<string, User>>(DB_KEY_USERS, {});
-             return Object.values(users)
-                .map(({ name, points }) => ({ name, points }))
-                .sort((a, b) => b.points - a.points);
+             return Object.values(users).map(({ name, points }) => ({ name, points })).sort((a, b) => b.points - a.points);
          }
          console.error("Leaderboard Error:", error);
          return [];
@@ -738,28 +657,17 @@ export const apiService = {
   },
 
   async submitFeedback(userEmail: string, type: FeedbackType, message: string): Promise<{ success: boolean }> {
-      console.log("--- Feedback Submitted (Mock) ---");
-      console.log("User:", userEmail);
-      console.log("Type:", type);
-      console.log("Message:", message);
+      console.log("--- Feedback Submitted (Mock) ---", userEmail, type, message);
       return { success: true };
   },
 
-  // --- Class Management API (LocalStorage) ---
   async createClass(teacherId: string, name: string): Promise<SchoolClass> {
     return new Promise((resolve) => {
         setTimeout(() => {
             const classes = readDb<Record<string, SchoolClass>>(DB_KEY_CLASSES, {});
             const classId = `cls-${Date.now()}`;
             const joinCode = `AIP-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-            const newClass: SchoolClass = {
-                id: classId,
-                teacherId,
-                name,
-                joinCode,
-                students: [],
-                assignedModules: [],
-            };
+            const newClass: SchoolClass = { id: classId, teacherId, name, joinCode, students: [], assignedModules: [] };
             classes[classId] = newClass;
             writeDb(DB_KEY_CLASSES, classes);
             resolve(newClass);
@@ -771,8 +679,7 @@ export const apiService = {
     return new Promise((resolve) => {
         setTimeout(() => {
             const classes = readDb<Record<string, SchoolClass>>(DB_KEY_CLASSES, {});
-            const teacherClasses = Object.values(classes).filter(c => c.teacherId === teacherId);
-            resolve(teacherClasses);
+            resolve(Object.values(classes).filter(c => c.teacherId === teacherId));
         }, SIMULATED_DELAY);
     });
   },
@@ -782,7 +689,6 @@ export const apiService = {
       setTimeout(() => {
         const classes = readDb<Record<string, SchoolClass>>(DB_KEY_CLASSES, {});
         const schoolClass = classes[classId];
-        
         if (schoolClass && schoolClass.students.length === 0) {
             const mockStudentNames = ['Abubakar', 'Bola', 'Chiamaka', 'David', 'Efe', 'Funke', 'Gozie'];
             const mockStudents: StudentProgress[] = mockStudentNames.map((name, i) => {
@@ -798,7 +704,6 @@ export const apiService = {
             classes[classId] = schoolClass;
             writeDb(DB_KEY_CLASSES, classes);
         }
-
         resolve(schoolClass || null);
       }, SIMULATED_DELAY);
     });
@@ -810,7 +715,6 @@ export const apiService = {
               const classes = readDb<Record<string, SchoolClass>>(DB_KEY_CLASSES, {});
               const schoolClass = classes[classId];
               if (!schoolClass) return reject(new Error("Class not found."));
-
               schoolClass.assignedModules = moduleIds;
               classes[classId] = schoolClass;
               writeDb(DB_KEY_CLASSES, classes);
@@ -819,32 +723,13 @@ export const apiService = {
       });
   },
 
-  // --- Multiplayer API (LocalStorage) ---
   async createGameSession(host: User, language: Language): Promise<GameSession> {
     return new Promise((resolve) => {
       setTimeout(() => {
         const games = readDb<Record<string, GameSession>>(DB_KEY_GAMES, {});
         const gameCode = Math.random().toString(36).substring(2, 7).toUpperCase();
-        
-        const hostPlayer: Player = {
-          id: host.id,
-          name: host.name,
-          score: 0,
-          progressIndex: 0,
-          language: language,
-          streak: 0,
-        };
-
-        const newSession: GameSession = {
-          code: gameCode,
-          hostId: host.id,
-          status: 'waiting',
-          players: [hostPlayer],
-          questions: [],
-          createdAt: Date.now(),
-          currentQuestionIndex: 0,
-        };
-
+        const hostPlayer: Player = { id: host.id, name: host.name, score: 0, progressIndex: 0, language: language, streak: 0 };
+        const newSession: GameSession = { code: gameCode, hostId: host.id, status: 'waiting', players: [hostPlayer], questions: [], createdAt: Date.now(), currentQuestionIndex: 0 };
         games[gameCode] = newSession;
         writeDb(DB_KEY_GAMES, games);
         resolve(newSession);
@@ -857,23 +742,11 @@ export const apiService = {
         setTimeout(() => {
             const games = readDb<Record<string, GameSession>>(DB_KEY_GAMES, {});
             const session = games[gameCode];
-
             if (!session) return reject(new Error('Game not found.'));
             if (session.status !== 'waiting') return reject(new Error('Game has already started.'));
             if (session.players.length >= 10) return reject(new Error('Game is full.'));
-            if (session.players.some(p => p.id === user.id)) { // Allow re-joining
-                return resolve(session);
-            }
-
-            const newPlayer: Player = {
-                id: user.id,
-                name: user.name,
-                score: 0,
-                progressIndex: 0,
-                language: language,
-                streak: 0,
-            };
-
+            if (session.players.some(p => p.id === user.id)) return resolve(session);
+            const newPlayer: Player = { id: user.id, name: user.name, score: 0, progressIndex: 0, language: language, streak: 0 };
             session.players.push(newPlayer);
             writeDb(DB_KEY_GAMES, games);
             resolve(session);
@@ -886,11 +759,7 @@ export const apiService = {
         setTimeout(() => {
             const games = readDb<Record<string, GameSession>>(DB_KEY_GAMES, {});
             const session = games[gameCode];
-            if (session) {
-                resolve(session);
-            } else {
-                reject(new Error('Game not found.'));
-            }
+            if (session) resolve(session); else reject(new Error('Game not found.'));
         }, SIMULATED_DELAY / 3);
     });
   },
@@ -900,33 +769,24 @@ export const apiService = {
         setTimeout(() => {
             const games = readDb<Record<string, GameSession>>(DB_KEY_GAMES, {});
             const session = games[gameCode];
-            
             if (!session) return reject(new Error('Game not found.'));
             if (session.hostId !== hostId) return reject(new Error('Only the host can start the game.'));
             if (session.status !== 'waiting') return reject(new Error('Game already in progress.'));
-            
-            // --- Generate Questions ---
             const allQuestions = CURRICULUM_MODULES.flatMap(module => {
                 const moduleQuestions = englishTranslations.curriculum[module.id].lessonContent.quiz.questions;
                 const multiplayerQuestions = [];
                 for (let i = 0; i < moduleQuestions.length; i++) {
                     if (moduleQuestions[i].type === 'multiple-choice') {
-                        multiplayerQuestions.push({
-                            id: `${module.id}-q${i}`,
-                            moduleId: module.id,
-                            questionIndexInModule: i,
-                        });
+                        multiplayerQuestions.push({ id: `${module.id}-q${i}`, moduleId: module.id, questionIndexInModule: i });
                     }
                 }
                 return multiplayerQuestions;
             });
-            
             const shuffled = allQuestions.sort(() => 0.5 - Math.random());
             session.questions = shuffled.slice(0, 5);
             session.status = 'in-progress';
             session.currentQuestionIndex = 0;
             session.players.forEach(p => p.progressIndex = 0);
-
             writeDb(DB_KEY_GAMES, games);
             resolve(session);
         }, SIMULATED_DELAY);
@@ -938,58 +798,37 @@ export const apiService = {
         setTimeout(async () => {
             const games = readDb<Record<string, GameSession>>(DB_KEY_GAMES, {});
             const session = games[gameCode];
-            
             if (!session) return reject(new Error('Game not found.'));
-            
             const player = session.players.find(p => p.id === userId);
             const question = session.questions[session.currentQuestionIndex];
-
-            if (!player || !question || player.progressIndex > session.currentQuestionIndex) {
-                return resolve(session);
-            }
-            if(question.id !== questionId) {
-                return reject(new Error('Question mismatch.'));
-            }
-
+            if (!player || !question || player.progressIndex > session.currentQuestionIndex) return resolve(session);
+            if(question.id !== questionId) return reject(new Error('Question mismatch.'));
             const questionContent = englishTranslations.curriculum[question.moduleId].lessonContent.quiz.questions[question.questionIndexInModule];
             const isCorrect = questionContent.correctAnswerIndex === answerIndex;
-
             if (isCorrect) {
                 player.score += 10;
                 player.streak += 1;
             } else {
                 player.streak = 0;
             }
-
             player.progressIndex = session.currentQuestionIndex + 1;
-
             const allPlayersAnswered = session.players.every(p => p.progressIndex > session.currentQuestionIndex);
-            
             if (allPlayersAnswered) {
                 const isLastQuestion = session.currentQuestionIndex === session.questions.length - 1;
-
                 if (isLastQuestion) {
                     session.status = 'finished';
-                    
                     for (const p of session.players) {
-                        // Update User using the API helper to ensure fallback logic runs
-                        // We use a simpler approach here for the mock to avoid recursion issues
                         const localUsers = readDb<Record<string, User>>(DB_KEY_USERS, {});
                         const userEmail = Object.keys(localUsers).find(email => localUsers[email].id === p.id);
                         if (userEmail) {
                             const userFromDb = localUsers[userEmail];
-                            const newStats = {
-                                wins: userFromDb.multiplayerStats.wins,
-                                gamesPlayed: userFromDb.multiplayerStats.gamesPlayed + 1,
-                            };
+                            const newStats = { wins: userFromDb.multiplayerStats.wins, gamesPlayed: userFromDb.multiplayerStats.gamesPlayed + 1 };
                             userFromDb.multiplayerStats = newStats;
                             userFromDb.points += p.score;
-                            
                             const newBadges = [...userFromDb.badges];
                             if (newStats.gamesPlayed === 1 && !newBadges.includes('first-win')) newBadges.push('first-win');
                             if (newStats.gamesPlayed >= 10 && !newBadges.includes('multiplayer-maestro')) newBadges.push('multiplayer-maestro');
                             if (newBadges.length > userFromDb.badges.length) userFromDb.badges = newBadges;
-                            
                             localUsers[userEmail] = userFromDb;
                             writeDb(DB_KEY_USERS, localUsers);
                         }
@@ -998,10 +837,8 @@ export const apiService = {
                      session.currentQuestionIndex += 1;
                 }
             }
-
             writeDb(DB_KEY_GAMES, games);
             resolve(session);
-
         }, SIMULATED_DELAY / 2);
      });
   }

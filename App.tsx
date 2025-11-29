@@ -44,7 +44,7 @@ const App: React.FC = () => {
   const [downloadedModules, setDownloadedModules] = useState<string[]>([]);
   const [isVoiceModeEnabled, setIsVoiceModeEnabled] = useLocalStorage('voiceMode', false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const { isListening, speak, startContinuousListening, stopListening } = useSpeech();
+  const { isListening, speak, startContinuousListening, stopListening, isSupported: isSpeechSupported } = useSpeech();
   
   // Pro Plan State
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
@@ -59,7 +59,6 @@ const App: React.FC = () => {
     }, 5000);
   }, []);
 
-  // Online/Offline status detection
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -73,7 +72,6 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Fetch initial offline data
   useEffect(() => {
     dbService.getDownloadedModuleIds().then(setDownloadedModules);
   }, []);
@@ -87,7 +85,7 @@ const App: React.FC = () => {
 
         console.log(`Syncing ${actions.length} offline actions...`);
 
-        const finalUpdates = actions.reduce((acc, action) => {
+        const offlineUpdates = actions.reduce((acc, action) => {
             if (action.type === 'updateUser') {
                Object.assign(acc, action.payload);
             }
@@ -95,10 +93,28 @@ const App: React.FC = () => {
         }, {} as Partial<User>);
 
         try {
-          const updatedUser = await apiService.updateUser(user.email, finalUpdates);
-           if (updatedUser) {
-              setUser(updatedUser as User);
+          // IMPORTANT: Fetch latest remote user first to ensure we merge correctly
+          // instead of overwriting with potentially stale offline base state.
+          const remoteUser = await apiService.getUserByEmail(user.email);
+          
+          if (remoteUser) {
+              const mergedUser = { ...remoteUser, ...offlineUpdates };
+              
+              // Ensure array merges are unique
+              if (offlineUpdates.badges) {
+                  mergedUser.badges = [...new Set([...remoteUser.badges, ...offlineUpdates.badges])];
+              }
+              if (offlineUpdates.completedModules) {
+                  mergedUser.completedModules = [...new Set([...remoteUser.completedModules, ...offlineUpdates.completedModules])];
+              }
+              // ... handle other arrays as needed
+
+              const updatedUser = await apiService.updateUser(user.id, mergedUser); // Use ID, not email
+              if (updatedUser) {
+                  setUser(updatedUser as User);
+              }
           }
+
           for (const action of actions) {
               if(action.id) await dbService.deleteAction(action.id);
           }
@@ -222,7 +238,7 @@ const App: React.FC = () => {
   }, [language, speak, t, findModuleFromCommand, logout]);
 
   useEffect(() => {
-    if (isVoiceModeEnabled) {
+    if (isVoiceModeEnabled && isSpeechSupported) {
       startContinuousListening(handleVoiceCommand, language);
     } else {
       stopListening();
@@ -230,7 +246,7 @@ const App: React.FC = () => {
     return () => {
       stopListening();
     };
-  }, [isVoiceModeEnabled, language, startContinuousListening, stopListening, handleVoiceCommand]);
+  }, [isVoiceModeEnabled, isSpeechSupported, language, startContinuousListening, stopListening, handleVoiceCommand]);
 
   const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id' | 'timestamp'>) => {
       if (!user) return;
@@ -250,12 +266,12 @@ const App: React.FC = () => {
       setUser(prev => prev ? { ...prev, ...updates } : null);
 
       if (isOnline) {
-          const updatedUser = await apiService.updateUser(user.email, updates);
+          const updatedUser = await apiService.updateUser(user.id, updates);
           if (updatedUser) setUser(updatedUser as User);
       } else {
           await dbService.addAction({ type: 'updateUser', payload: updates, timestamp: Date.now() });
       }
-      // Check for point-based badges
+      
       if(user.wallet.balance < 100 && newBalance >= 100) {
         awardBadge('point-pioneer');
       }
@@ -270,7 +286,7 @@ const App: React.FC = () => {
         setUser(prev => prev ? { ...prev, badges: updates.badges } : null);
         
         if (isOnline) {
-            const updatedUser = await apiService.updateUser(user.email, updates);
+            const updatedUser = await apiService.updateUser(user.id, updates);
             if(updatedUser) setUser(updatedUser as User);
         } else {
             await dbService.addAction({ type: 'updateUser', payload: updates, timestamp: Date.now() });
@@ -280,7 +296,6 @@ const App: React.FC = () => {
   }, [user, isOnline, showToast]);
 
   const completeModule = useCallback(async (moduleId: string) => {
-    // FIX: Removed strict !user.level check to allow progression for users with null levels (defaulting to Explorer).
     if (!user || user.completedModules.includes(moduleId)) return;
     
     const level = user.level || LearningPath.Explorer;
@@ -296,7 +311,7 @@ const App: React.FC = () => {
     setUser(prev => prev ? { ...prev, ...moduleUpdates } : null);
     
     if (isOnline) {
-        const updatedUser = await apiService.updateUser(user.email, moduleUpdates);
+        const updatedUser = await apiService.updateUser(user.id, moduleUpdates);
         if (updatedUser) setUser(updatedUser as User);
     } else {
         await dbService.addAction({ type: 'updateUser', payload: moduleUpdates, timestamp: Date.now() });
@@ -306,7 +321,6 @@ const App: React.FC = () => {
       awardBadge('first-step');
     }
     
-    // Check for path completion
     const userPathModules = LEARNING_PATHS[level].levels.flat();
     const completedInPath = updatedCompletedModules.filter(id => userPathModules.includes(id));
     if (completedInPath.length === userPathModules.length) {
@@ -324,11 +338,8 @@ const App: React.FC = () => {
 
       if (language !== Language.English) {
           try {
-              // Explicitly remove scenario before sending to translation service to match expected type
               const { scenario, ...contentForTranslation } = contentToSave;
               const translatedContent = await geminiService.generateDynamicLessonContent(contentForTranslation, language);
-              
-              // Merge scenario back from English content (scenario is not translated by AI currently)
               await dbService.saveContent(moduleId, language, { ...translatedContent, scenario: contentToSave.scenario });
           } catch (error) {
               console.error(`Failed to download translated content for ${moduleId}`, error);
@@ -338,6 +349,10 @@ const App: React.FC = () => {
   }, [language]);
   
   const toggleVoiceMode = () => {
+    if (!isSpeechSupported) {
+        alert("Speech recognition is not supported in this browser. Please use Google Chrome or Microsoft Edge.");
+        return;
+    }
     if (!isVoiceModeEnabled) {
         alert("Voice-First mode requires microphone access to function. Please allow access if prompted.");
     }
@@ -380,25 +395,18 @@ const App: React.FC = () => {
   }), [user, language, setLanguage, currentPage, activeModuleId, gameSession, isOnline, downloadedModules, isVoiceModeEnabled, addTransaction, completeModule, awardBadge, downloadModule, speak, isListening, logout, handleSetUser]);
 
   const renderCurrentPage = () => {
-    // Gated Pages
     const proPages = [Page.PeerPractice, Page.PodcastGenerator, Page.CareerExplorer, Page.CreationStudio, Page.StudentPortfolio, Page.AiTutor];
     if (proPages.includes(currentPage) && !user?.isPro) {
-        // This is a fallback. The primary gating is on the Dashboard buttons.
-        // If a user gets here (e.g., direct nav), show the modal.
         if (!isUpgradeModalOpen) {
             openUpgradeModal(currentPage);
         }
-        return <Dashboard />; // Show dashboard behind the modal
+        return <Dashboard />; 
     }
 
     switch(currentPage) {
         case Page.Dashboard:
-            if (user?.role === UserRole.Teacher) {
-                return <TeacherDashboard />;
-            }
-            if (user?.role === UserRole.Parent) {
-                return <ParentDashboard />;
-            }
+            if (user?.role === UserRole.Teacher) return <TeacherDashboard />;
+            if (user?.role === UserRole.Parent) return <ParentDashboard />;
             return <Dashboard />;
         case Page.PeerPractice: return <PeerPractice />;
         case Page.AiVsHuman: return <AiVsHumanGame />;

@@ -363,7 +363,11 @@ export const Profile: React.FC = () => {
     
     const handleDownload = useCallback(() => {
         if (certificateRef.current === null) return;
-        htmlToImage.toPng(certificateRef.current, { cacheBust: true, backgroundColor: '#ffffff' })
+        htmlToImage.toPng(certificateRef.current, { 
+            cacheBust: true, 
+            backgroundColor: '#ffffff',
+            useCORS: true // Enable CORS for images
+        })
           .then((dataUrl) => {
             const link = document.createElement('a');
             link.download = `AI-Kasahorow-Certificate-${user.name}.png`;

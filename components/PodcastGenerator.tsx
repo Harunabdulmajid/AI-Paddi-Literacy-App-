@@ -26,19 +26,18 @@ function pcmToWav(pcmData: Uint8Array, sampleRate: number, numChannels: number, 
     };
 
     const dataSize = pcmData.length;
-    // The total file size is 44 bytes for the header minus 8 bytes for RIFF/fileSize, plus the data size. So, 36 + dataSize.
     const fileSize = 36 + dataSize; 
 
     writeString(0, 'RIFF');
     view.setUint32(4, fileSize, true);
     writeString(8, 'WAVE');
     writeString(12, 'fmt ');
-    view.setUint32(16, 16, true); // Sub-chunk 1 size (16 for PCM)
-    view.setUint16(20, 1, true); // Audio format (1 for PCM)
+    view.setUint32(16, 16, true); 
+    view.setUint16(20, 1, true); 
     view.setUint16(22, numChannels, true);
     view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true); // Byte rate
-    view.setUint16(32, numChannels * (bitsPerSample / 8), true); // Block align
+    view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true); 
+    view.setUint16(32, numChannels * (bitsPerSample / 8), true); 
     view.setUint16(34, bitsPerSample, true);
     writeString(36, 'data');
     view.setUint32(40, dataSize, true);
@@ -62,7 +61,6 @@ export const PodcastGenerator: React.FC = () => {
 
     const audioRef = useRef<HTMLAudioElement>(null);
 
-    // Clean up the object URL when the component unmounts or a new URL is created
     useEffect(() => {
         return () => {
             if (audioUrl) {
@@ -71,7 +69,6 @@ export const PodcastGenerator: React.FC = () => {
         };
     }, [audioUrl]);
 
-    // Add event listeners for the audio element to sync playing state
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return;
@@ -114,7 +111,7 @@ export const PodcastGenerator: React.FC = () => {
 
             if (base64Audio) {
                 const pcmData = decode(base64Audio);
-                // The API returns 16-bit PCM at 24000Hz with 1 channel
+                // Gemini TTS model returns 1 channel, 24kHz sample rate audio
                 const wavBlob = pcmToWav(pcmData, 24000, 1, 16);
                 const url = URL.createObjectURL(wavBlob);
                 setAudioUrl(url);

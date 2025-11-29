@@ -15,32 +15,30 @@ const languageMap: Record<Language, string> = {
 };
 
 // --- Speech Recognition Singleton ---
-// This is created once and reused to avoid issues with multiple instances.
 let recognition: any = null;
+let isSupported = false;
+
 try {
   // @ts-ignore
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (SpeechRecognition) {
       recognition = new SpeechRecognition();
+      isSupported = true;
   }
 } catch (e) {
   console.error("SpeechRecognition is not supported or failed to initialize.", e);
 }
-
 
 export const useSpeech = () => {
     const [isListening, setIsListening] = useState(false);
     const synthRef = useRef(window.speechSynthesis);
     const isListeningRef = useRef(false);
 
-    // Use a ref to store state that shouldn't trigger re-renders but needs to be
-    // accessed by event handlers without stale closures.
     const listeningStateRef = useRef({
       isContinuous: false,
       callback: (transcript: string) => {},
     });
     
-    // --- Effect to set up and tear down event listeners ---
     useEffect(() => {
         if (!recognition) return;
 
@@ -60,10 +58,8 @@ export const useSpeech = () => {
             const error = event.error;
             if (error === 'network') {
                 console.warn('Speech recognition network error. Attempting to recover.');
-                // We don't disable continuous listening for network errors, `onend` will handle restart.
             } else if (error !== 'aborted' && error !== 'no-speech') {
                 console.error('Speech recognition error:', error);
-                // For other errors (like 'not-allowed' or 'audio-capture'), stop trying to restart.
                 listeningStateRef.current.isContinuous = false;
             }
             isListeningRef.current = false;
@@ -73,11 +69,8 @@ export const useSpeech = () => {
         const handleEnd = () => {
             isListeningRef.current = false;
             setIsListening(false);
-            // If it was a continuous session that ended (e.g., due to browser timeout or a recoverable network error),
-            // and we still want it to be listening, restart it after a short delay.
             if (listeningStateRef.current.isContinuous) {
                 setTimeout(() => {
-                    // Check again in case stopListening was called during the timeout
                     if (listeningStateRef.current.isContinuous && !isListeningRef.current) {
                         try {
                             recognition.start();
@@ -85,7 +78,7 @@ export const useSpeech = () => {
                             console.error("Error restarting speech recognition:", err);
                         }
                     }
-                }, 1000); // 1-second delay to prevent spamming on persistent network issues.
+                }, 1000); 
             }
         };
 
@@ -94,7 +87,6 @@ export const useSpeech = () => {
         recognition.onerror = handleError;
         recognition.onend = handleEnd;
         
-        // Cleanup function when the component using the hook unmounts.
         return () => {
             listeningStateRef.current.isContinuous = false;
             if (recognition) {
@@ -102,7 +94,7 @@ export const useSpeech = () => {
             }
             isListeningRef.current = false;
         };
-    }, []); // Empty array ensures this effect runs only once.
+    }, []);
 
     const speak = useCallback((text: string, lang: Language) => {
         if (synthRef.current.speaking) {
@@ -113,7 +105,6 @@ export const useSpeech = () => {
         synthRef.current.speak(utterance);
     }, []);
 
-    // For single-shot recognition (like in the Quiz)
     const startListening = useCallback((callback: (transcript: string) => void, lang: Language) => {
         if (!recognition || isListeningRef.current) return;
         
@@ -132,7 +123,6 @@ export const useSpeech = () => {
         }
     }, []);
 
-    // For continuous recognition (global navigation)
     const startContinuousListening = useCallback((callback: (transcript: string) => void, lang: Language) => {
         if (!recognition || isListeningRef.current) return;
 
@@ -152,17 +142,14 @@ export const useSpeech = () => {
     }, []);
 
     const stopListening = useCallback(() => {
-        // This is the key part: we signal that we no longer want to be listening.
-        // The onend handler will then see isContinuous is false and won't restart.
         listeningStateRef.current.isContinuous = false;
         if (recognition && isListeningRef.current) {
             recognition.stop();
         } else {
-            // If it's not listening but we call stop, ensure the state is correct.
             isListeningRef.current = false;
             setIsListening(false);
         }
     }, []);
 
-    return { isListening, speak, startListening, startContinuousListening, stopListening };
+    return { isListening, speak, startListening, startContinuousListening, stopListening, isSupported };
 };

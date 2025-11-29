@@ -58,7 +58,7 @@ export const UserAvatar: React.FC<{ name: string; avatarUrl?: string; avatarId?:
     const finalClassName = `${className || 'w-10 h-10 text-lg'} ${baseClasses}`;
     
     if (avatarUrl) {
-        return <img src={avatarUrl} alt={name} className={`${finalClassName} object-cover`} />;
+        return <img src={avatarUrl} alt={name} className={`${finalClassName} object-cover`} crossOrigin="anonymous" />;
     }
     
     const AvatarComponent = avatarId ? AVATARS[avatarId] : null;

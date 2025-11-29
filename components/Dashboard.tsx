@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useMemo } from 'react';
 import { AppContext } from './AppContext';
 import { CURRICULUM_MODULES, LEARNING_PATHS } from '../constants';
 import { ModuleCard } from './ModuleCard';
@@ -39,12 +39,14 @@ const ProgressSummary: React.FC = () => {
     // Default to Explorer if level is missing to prevent crash
     const level = user.level || LearningPath.Explorer;
     
-    const userPathModules = LEARNING_PATHS[level].levels.flat();
-    const completedCount = user.completedModules.filter(id => userPathModules.includes(id)).length;
-    const totalCount = userPathModules.length;
-    const progressPercentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
-    
-    const nextModule = CURRICULUM_MODULES.find(m => userPathModules.includes(m.id) && !user.completedModules.includes(m.id));
+    const { progressPercentage, completedCount, totalCount, nextModule } = useMemo(() => {
+        const userPathModules = LEARNING_PATHS[level].levels.flat();
+        const completed = user.completedModules.filter(id => userPathModules.includes(id)).length;
+        const total = userPathModules.length;
+        const percentage = total > 0 ? (completed / total) * 100 : 0;
+        const next = CURRICULUM_MODULES.find(m => userPathModules.includes(m.id) && !user.completedModules.includes(m.id));
+        return { progressPercentage: percentage, completedCount: completed, totalCount: total, nextModule: next };
+    }, [user.completedModules, level]);
 
     const handleContinueLearning = () => {
         if (nextModule) {

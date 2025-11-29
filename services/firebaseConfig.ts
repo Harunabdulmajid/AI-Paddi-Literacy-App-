@@ -6,7 +6,9 @@ import { getStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyATJ9DydjsNiInO4A2iVIIqT-Diu0UftwI",
+  // Use environment variable if available, otherwise fallback to the project key.
+  // Note: If both are invalid, the app should gracefully degrade to offline mode.
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyATJ9DydjsNiInO4A2iVIIqT-Diu0UftwI",
   authDomain: "gen-lang-client-0253287074.firebaseapp.com",
   projectId: "gen-lang-client-0253287074",
   storageBucket: "gen-lang-client-0253287074.firebasestorage.app",
@@ -19,6 +21,15 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-export const analytics = getAnalytics(app);
+
+// Initialize Analytics conditionally to prevent crashes if the API key is invalid or network is blocked
+let analyticsInstance = null;
+try {
+  analyticsInstance = getAnalytics(app);
+} catch (error) {
+  console.warn("Firebase Analytics initialization failed:", error);
+}
+export const analytics = analyticsInstance;
+
 export const db = getFirestore(app);
 export const storage = getStorage(app);

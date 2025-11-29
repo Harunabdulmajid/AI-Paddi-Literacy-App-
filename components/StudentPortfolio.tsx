@@ -24,7 +24,12 @@ export const StudentPortfolio: React.FC = () => {
           return;
         }
         setIsGenerating(true);
-        htmlToImage.toPng(portfolioRef.current, { cacheBust: true, backgroundColor: '#ffffff', pixelRatio: 2 })
+        htmlToImage.toPng(portfolioRef.current, { 
+            cacheBust: true, 
+            backgroundColor: '#ffffff', 
+            pixelRatio: 2,
+            useCORS: true // Enable CORS for images
+        })
           .then((dataUrl) => {
             const link = document.createElement('a');
             link.download = `ai-paddi-portfolio-${user.name.replace(/\s+/g, '-').toLowerCase()}.png`;

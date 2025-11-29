@@ -1,5 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
-// FIX: Correct the import path for AppContext.
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import { AppContext } from './AppContext';
 import { apiService } from '../services/apiService';
 import { useTranslations } from '../i18n';
@@ -14,21 +13,35 @@ export const PracticeLobby: React.FC = () => {
   const [gameCode, setGameCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+  
+  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Polling for session updates
   useEffect(() => {
-    if (gameSession && gameSession.status === 'waiting') {
-      const interval = setInterval(async () => {
-        try {
-          const updatedSession = await apiService.getGameSession(gameSession.code);
-          setGameSession(updatedSession);
-        } catch (err) {
-          console.error("Failed to poll session", err);
+    const poll = async () => {
+        if (gameSession && gameSession.status === 'waiting') {
+            try {
+                const updatedSession = await apiService.getGameSession(gameSession.code);
+                setGameSession(updatedSession);
+            } catch (err) {
+                console.error("Failed to poll session", err);
+            } finally {
+                // Schedule next poll only after current one finishes
+                if (gameSession && gameSession.status === 'waiting') {
+                    pollingRef.current = setTimeout(poll, 2000);
+                }
+            }
         }
-      }, 2000); // Poll every 2 seconds
-      return () => clearInterval(interval);
+    };
+
+    if (gameSession && gameSession.status === 'waiting') {
+        poll();
     }
-  }, [gameSession, setGameSession]);
+
+    return () => {
+        if (pollingRef.current) clearTimeout(pollingRef.current);
+    };
+  }, [gameSession?.status, gameSession?.code, setGameSession]);
 
   if (!user) return null;
 

@@ -1,5 +1,4 @@
-import React, { useContext, useState, useEffect, useMemo } from 'react';
-// FIX: Correct the import path for AppContext.
+import React, { useContext, useState, useEffect, useRef } from 'react';
 import { AppContext } from './AppContext';
 import { useTranslations } from '../i18n';
 import { apiService } from '../services/apiService';
@@ -39,6 +38,8 @@ export const PracticeGame: React.FC = () => {
     const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
     const [startTime, setStartTime] = useState(Date.now());
     
+    const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    
     const currentPlayer = gameSession?.players.find(p => p.id === user?.id);
     const currentQuestionIndex = gameSession?.currentQuestionIndex ?? 0;
     const currentQuestionInfo = gameSession?.questions[currentQuestionIndex];
@@ -51,18 +52,29 @@ export const PracticeGame: React.FC = () => {
 
     // Polling for game state updates
     useEffect(() => {
-        const interval = setInterval(async () => {
+        const poll = async () => {
             if (gameSession && gameSession.status === 'in-progress') {
                 try {
                     const updatedSession = await apiService.getGameSession(gameSession.code);
                     setGameSession(updatedSession);
                 } catch (err) {
                     console.error("Failed to poll session", err);
+                } finally {
+                    if (gameSession && gameSession.status === 'in-progress') {
+                        pollingRef.current = setTimeout(poll, 2000);
+                    }
                 }
             }
-        }, 2000);
-        return () => clearInterval(interval);
-    }, [gameSession, setGameSession]);
+        };
+
+        if (gameSession && gameSession.status === 'in-progress') {
+            poll();
+        }
+
+        return () => {
+            if (pollingRef.current) clearTimeout(pollingRef.current);
+        };
+    }, [gameSession?.status, gameSession?.code, setGameSession]);
 
     // Reset for next question
     useEffect(() => {
@@ -85,7 +97,6 @@ export const PracticeGame: React.FC = () => {
             setGameSession(updatedSession);
         } catch (error) {
             console.error("Failed to submit answer:", error);
-            // Optionally show an error to the user
         }
     };
     
