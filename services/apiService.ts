@@ -14,6 +14,7 @@ const SIMULATED_DELAY = 300; // ms
 const DAILY_TRANSFER_LIMIT = 200;
 
 const readDb = <T>(key: string, defaultValue: T): T => {
+  if (typeof window === 'undefined') return defaultValue;
   try {
     const data = localStorage.getItem(key);
     return data ? JSON.parse(data) : defaultValue;
@@ -23,6 +24,7 @@ const readDb = <T>(key: string, defaultValue: T): T => {
 };
 
 const writeDb = <T>(key: string, data: T) => {
+  if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(key, JSON.stringify(data));
   } catch (e: any) {
@@ -43,6 +45,7 @@ const initializeDefaultWallet = (points: number): Wallet => ({
 });
 
 const initializeMockData = () => {
+    if (typeof window === 'undefined') return;
     const users = readDb<Record<string, User>>(DB_KEY_USERS, {});
     if (Object.keys(users).length === 0) {
         const amina: User = {

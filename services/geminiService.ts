@@ -2,9 +2,14 @@ import { GoogleGenAI, Type, Chat, Modality } from "@google/genai";
 import { Language, LearningPath, Difficulty, LessonContent } from "../types";
 import { translations, englishTranslations } from '../i18n';
 
-// FIX: Per @google/genai guidelines, initialize the SDK with process.env.API_KEY directly
-// and assume it's set in the environment.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let ai: GoogleGenAI | null = null;
+
+const getAiClient = () => {
+    if (!ai) {
+        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    }
+    return ai;
+};
 
 const model: string = 'gemini-2.5-flash';
 
@@ -35,7 +40,8 @@ export const geminiService = {
       `;
 
       try {
-          const response = await ai.models.generateContent({
+          const client = getAiClient();
+          const response = await client.models.generateContent({
               model,
               contents: prompt,
               config: {
@@ -90,7 +96,8 @@ export const geminiService = {
     `;
 
     try {
-      const response = await ai.models.generateContent({
+      const client = getAiClient();
+      const response = await client.models.generateContent({
         model,
         contents: prompt,
         config: {
@@ -127,7 +134,8 @@ export const geminiService = {
 
   async generateSpeech(text: string, voice: string = 'Kore'): Promise<string> {
       try {
-          const response = await ai.models.generateContent({
+          const client = getAiClient();
+          const response = await client.models.generateContent({
               model: "gemini-2.5-flash-preview-tts",
               contents: [{ parts: [{ text }] }],
               config: {
@@ -152,7 +160,8 @@ export const geminiService = {
 
   startCreationStudioChat(language: Language): Chat {
     const t = (translations[language] || englishTranslations).creationStudio;
-    const chat: Chat = ai.chats.create({
+    const client = getAiClient();
+    const chat: Chat = client.chats.create({
         model,
         config: {
             systemInstruction: t.systemInstruction,
@@ -163,7 +172,8 @@ export const geminiService = {
 
   startTutorChat(language: Language): Chat {
     const t = (translations[language] || englishTranslations).aiTutor;
-    const chat: Chat = ai.chats.create({
+    const client = getAiClient();
+    const chat: Chat = client.chats.create({
         model,
         config: {
             systemInstruction: t.systemInstruction,
