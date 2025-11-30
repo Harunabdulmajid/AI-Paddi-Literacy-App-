@@ -1,11 +1,9 @@
-// FIX: Import `useEffect` from React to resolve the "Cannot find name 'useEffect'" error.
 import React, { useContext, useRef, useCallback, useState, useEffect } from 'react';
 import { AppContext } from './AppContext';
-import { Award, CheckCircle, Download, Share2, Edit, X, Check, Loader2, LogOut, ShieldCheck, MessageSquarePlus, Wallet, Feather, BookOpen, BrainCircuit, PenTool, Briefcase, Trash2, AlertTriangle, Upload, Image as ImageIcon, Mail, Phone, MapPin, Save, Globe } from 'lucide-react';
-import { LearningPath, User, Page, AppContextType } from '../types';
+import { Award, CheckCircle, Download, Share2, Edit, X, Loader2, LogOut, ShieldCheck, MessageSquarePlus, Wallet, Feather, PenTool, Briefcase, Trash2, AlertTriangle, Upload, Mail, Phone, MapPin, Save, User as UserIcon } from 'lucide-react';
+import { LearningPath, User as UserType, Page, AppContextType } from '../types';
 import { useTranslations } from '../i18n';
-// FIX: Import the `BADGES` constant to resolve the "Cannot find name 'BADGES'" error.
-import { CURRICULUM_MODULES, LEARNING_PATHS, BADGES } from '../constants';
+import { LEARNING_PATHS, BADGES } from '../constants';
 import * as htmlToImage from 'html-to-image';
 import { apiService } from '../services/apiService';
 import { BadgeIcon } from './BadgeIcon';
@@ -19,7 +17,7 @@ const COUNTRIES = [
     "Senegal", "Ivory Coast", "United States", "United Kingdom", "Canada", "India", "Other"
 ].sort();
 
-const Certificate: React.FC<{ user: User, certificateRef: React.RefObject<HTMLDivElement> }> = ({ user, certificateRef }) => {
+const Certificate: React.FC<{ user: UserType, certificateRef: React.RefObject<HTMLDivElement> }> = ({ user, certificateRef }) => {
     const t = useTranslations();
     const completionDate = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
     const certificateId = `AIK-${new Date().getFullYear()}-${user.id.slice(-6).toUpperCase()}`;
@@ -64,7 +62,7 @@ interface AvatarSelectionModalProps {
     onSave: (avatarId: string) => Promise<void>;
     currentAvatarId: string;
     isSaving: boolean;
-    user: User;
+    user: UserType;
     onUploadSuccess: (url: string) => void;
 }
 
@@ -230,7 +228,6 @@ const PathSelectionModal: React.FC<{ isOpen: boolean, onClose: () => void, onSel
 
 
 export const Profile: React.FC = () => {
-    // FIX: Cast context to the correct type to resolve TS inference errors.
     const context = useContext(AppContext) as AppContextType | null;
     if (!context) throw new Error("Profile must be used within an AppProvider");
     const { user, setUser, logout, setCurrentPage } = context;
@@ -278,12 +275,12 @@ export const Profile: React.FC = () => {
         setIsSaving(true);
         const updates = {
             name: editForm.name.trim(),
-            phoneNumber: editForm.phoneNumber.trim(),
-            country: editForm.country.trim()
+            phoneNumber: editForm.phoneNumber?.trim(),
+            country: editForm.country?.trim()
         };
         const updatedUser = await apiService.updateUser(user.id, updates);
         if (updatedUser) {
-            setUser(updatedUser as User);
+            setUser(updatedUser as UserType);
         }
         setIsSaving(false);
         setIsEditing(false);
@@ -298,7 +295,7 @@ export const Profile: React.FC = () => {
         // Clear avatarUrl if switching to a preset avatar
         const updatedUser = await apiService.updateUser(user.id, { avatarId, avatarUrl: null as any }); 
         if (updatedUser) {
-            setUser(updatedUser as User);
+            setUser(updatedUser as UserType);
         }
         setIsSavingAvatar(false);
         setIsAvatarModalOpen(false);
@@ -330,7 +327,7 @@ export const Profile: React.FC = () => {
             completedModules: [] // Reset progress
         });
         if (updatedUser) {
-            setUser(updatedUser as User);
+            setUser(updatedUser as UserType);
         }
         setIsSavingPath(false);
         setIsPathConfirmModalOpen(false);
@@ -421,7 +418,7 @@ export const Profile: React.FC = () => {
 
                 <div className="grid lg:grid-cols-3 gap-8">
                     {/* Profile Card */}
-                    <div className="lg:col-span-1 bg-white p-6 md:p-8 rounded-2xl shadow-lg text-center flex flex-col items-center h-fit">
+                    <div className="lg:col-span-1 bg-white p-6 md:p-8 rounded-2xl shadow-lg text-center flex flex-col items-center h-fit transition-all duration-300">
                         <button onClick={() => setIsAvatarModalOpen(true)} className="relative group rounded-full mb-5 ring-4 ring-white shadow-md hover:ring-primary transition-all">
                             <UserAvatar name={user.name} avatarId={user.avatarId} avatarUrl={user.avatarUrl} className="w-24 h-24 md:w-32 md:h-32 text-4xl md:text-5xl" />
                             <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
@@ -431,59 +428,77 @@ export const Profile: React.FC = () => {
                         
                         {!isEditing ? (
                             <>
-                                <div className="flex items-center gap-2 mb-2">
+                                <div className="flex items-center gap-2 mb-2 animate-fade-in">
                                     <h3 className="text-2xl md:text-3xl font-bold text-neutral-800">{user.name}</h3>
                                     <button onClick={handleEditProfile} className="text-neutral-500 hover:text-primary"><Edit size={20}/></button>
                                 </div>
-                                <div className="w-full text-left bg-neutral-50 p-4 rounded-lg mb-6 space-y-2">
-                                    <div className="flex items-center gap-2 text-neutral-600">
-                                        <Mail size={16} className="text-neutral-400" />
-                                        <span className="text-sm truncate">{user.email}</span>
+                                <div className="w-full text-left bg-neutral-50 p-4 rounded-xl mb-6 space-y-2 animate-fade-in">
+                                    <div className="flex items-center gap-3 text-neutral-700">
+                                        <Mail size={18} className="text-neutral-400" />
+                                        <span className="text-sm truncate font-medium">{user.email}</span>
                                     </div>
                                     {user.phoneNumber && (
-                                        <div className="flex items-center gap-2 text-neutral-600">
-                                            <Phone size={16} className="text-neutral-400" />
-                                            <span className="text-sm">{user.phoneNumber}</span>
+                                        <div className="flex items-center gap-3 text-neutral-700">
+                                            <Phone size={18} className="text-neutral-400" />
+                                            <span className="text-sm font-medium">{user.phoneNumber}</span>
                                         </div>
                                     )}
                                     {user.country && (
-                                        <div className="flex items-center gap-2 text-neutral-600">
-                                            <MapPin size={16} className="text-neutral-400" />
-                                            <span className="text-sm">{user.country}</span>
+                                        <div className="flex items-center gap-3 text-neutral-700">
+                                            <MapPin size={18} className="text-neutral-400" />
+                                            <span className="text-sm font-medium">{user.country}</span>
                                         </div>
                                     )}
                                 </div>
                             </>
                         ) : (
-                            <div className="w-full space-y-3 mb-6">
-                                <input 
-                                    type="text" 
-                                    value={editForm.name} 
-                                    onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-                                    className="w-full p-2 border border-neutral-300 rounded focus:ring-2 focus:ring-primary focus:outline-none"
-                                    placeholder="Full Name"
-                                />
-                                <input 
-                                    type="tel" 
-                                    value={editForm.phoneNumber} 
-                                    onChange={(e) => setEditForm({...editForm, phoneNumber: e.target.value})}
-                                    className="w-full p-2 border border-neutral-300 rounded focus:ring-2 focus:ring-primary focus:outline-none"
-                                    placeholder="Phone Number"
-                                />
-                                <select 
-                                    value={editForm.country} 
-                                    onChange={(e) => setEditForm({...editForm, country: e.target.value})}
-                                    className="w-full p-2 border border-neutral-300 rounded focus:ring-2 focus:ring-primary focus:outline-none"
-                                >
-                                    <option value="">Select Country</option>
-                                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                                <div className="flex gap-2 justify-center pt-2">
-                                    <button onClick={handleSaveProfile} disabled={isSaving} className="bg-primary text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-primary-dark transition disabled:bg-neutral-300">
-                                        {isSaving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16} />} Save
-                                    </button>
-                                    <button onClick={handleCancelEdit} disabled={isSaving} className="bg-neutral-200 text-neutral-700 px-4 py-2 rounded hover:bg-neutral-300 transition">
+                            <div className="w-full space-y-4 mb-6 animate-fade-in">
+                                <h3 className="font-bold text-lg text-neutral-800 mb-2">Edit Profile</h3>
+                                
+                                <div className="relative">
+                                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+                                    <input 
+                                        type="text" 
+                                        value={editForm.name} 
+                                        onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                                        className="w-full pl-10 pr-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition outline-none bg-neutral-50 focus:bg-white"
+                                        placeholder="Full Name"
+                                    />
+                                </div>
+
+                                <div className="relative">
+                                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+                                    <input 
+                                        type="tel" 
+                                        value={editForm.phoneNumber} 
+                                        onChange={(e) => setEditForm({...editForm, phoneNumber: e.target.value})}
+                                        className="w-full pl-10 pr-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition outline-none bg-neutral-50 focus:bg-white"
+                                        placeholder="Phone Number"
+                                    />
+                                </div>
+
+                                <div className="relative">
+                                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+                                    <select 
+                                        value={editForm.country} 
+                                        onChange={(e) => setEditForm({...editForm, country: e.target.value})}
+                                        className="w-full pl-10 pr-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition outline-none bg-neutral-50 focus:bg-white appearance-none text-neutral-700"
+                                    >
+                                        <option value="" disabled>Select Country</option>
+                                        {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
+                                        <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-3 justify-center pt-2">
+                                    <button onClick={handleCancelEdit} disabled={isSaving} className="flex-1 bg-neutral-100 text-neutral-600 font-bold py-3 px-4 rounded-xl hover:bg-neutral-200 transition">
                                         Cancel
+                                    </button>
+                                    <button onClick={handleSaveProfile} disabled={isSaving} className="flex-1 bg-primary text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-primary-dark transition shadow-lg shadow-primary/30 disabled:opacity-70">
+                                        {isSaving ? <Loader2 className="animate-spin" size={18}/> : <Save size={18} />}
+                                        Save
                                     </button>
                                 </div>
                             </div>

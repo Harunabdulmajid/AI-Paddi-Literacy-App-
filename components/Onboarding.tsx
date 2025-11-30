@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-// FIX: Aliased the `User` icon to `UserIcon` to avoid a name conflict with the `User` type.
-import { Loader2, ArrowRight, GraduationCap, PartyPopper, CheckCircle, Feather, BookOpen, BrainCircuit, User as UserIcon, Users, Book, PenTool, Briefcase, ShieldCheck, BookCopy, UserPlus, Eye, EyeOff, Lock, Mail, Upload } from 'lucide-react';
+import { Loader2, ArrowRight, GraduationCap, PartyPopper, CheckCircle, Feather, BookOpen, User as UserIcon, Users, Book, PenTool, Briefcase, ShieldCheck, BookCopy, UserPlus, Eye, EyeOff, Lock, Mail, Upload } from 'lucide-react';
 import { apiService } from '../services/apiService';
-import { LearningPath, User, UserRole } from '../types';
+import { LearningPath, User as UserType, UserRole } from '../types';
 import { Translation } from '../i18n';
 
 interface OnboardingProps {
-    setUser: (user: User | null) => void;
+    setUser: (user: UserType | null) => void;
     t: Translation;
 }
 
@@ -67,7 +66,6 @@ const WelcomeStep: React.FC<{ onGetStarted: () => void, t: Translation }> = ({ o
 
 const RoleSelectionStep: React.FC<{ onSelect: (role: UserRole) => void, isLoading: boolean, t: Translation }> = ({ onSelect, isLoading, t }) => {
     const roles = [
-        // FIX: Replaced `User` icon with the aliased `UserIcon`.
         { role: UserRole.Student, icon: UserIcon, title: t.onboarding.roleSelection.student, desc: t.onboarding.roleSelection.studentDescription },
         { role: UserRole.Teacher, icon: Book, title: t.onboarding.roleSelection.teacher, desc: t.onboarding.roleSelection.teacherDescription },
         { role: UserRole.Parent, icon: Users, title: t.onboarding.roleSelection.parent, desc: t.onboarding.roleSelection.parentDescription },
@@ -137,7 +135,7 @@ const PathSelectionStep: React.FC<{ onSelect: (path: LearningPath) => void, isLo
     );
 };
 
-const CreateClassStep: React.FC<{ t: Translation, transitionUser: User, setUser: (user: User) => void }> = ({ t, transitionUser, setUser }) => {
+const CreateClassStep: React.FC<{ t: Translation, transitionUser: UserType, setUser: (user: UserType) => void }> = ({ t, transitionUser, setUser }) => {
     const [className, setClassName] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isCreated, setIsCreated] = useState(false);
@@ -200,7 +198,7 @@ const CreateClassStep: React.FC<{ t: Translation, transitionUser: User, setUser:
     );
 };
 
-const LinkChildStep: React.FC<{ t: Translation, transitionUser: User, setUser: (user: User) => void }> = ({ t, transitionUser, setUser }) => {
+const LinkChildStep: React.FC<{ t: Translation, transitionUser: UserType, setUser: (user: UserType) => void }> = ({ t, transitionUser, setUser }) => {
     const [childEmail, setChildEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isLinked, setIsLinked] = useState(false);
@@ -307,7 +305,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ setUser, t }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assignedLevel, setAssignedLevel] = useState<LearningPath | null>(null);
-  const [transitionUser, setTransitionUser] = useState<User | null>(null);
+  const [transitionUser, setTransitionUser] = useState<UserType | null>(null);
   
   const [signupDetails, setSignupDetails] = useState<{ 
       name: string; 
